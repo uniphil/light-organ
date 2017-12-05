@@ -1,0 +1,10 @@
+[package]
+name = "light-organ-blah"
+version = "0.1.0"
+authors = ["phil <uniphil@gmail.com>"]
+
+[dependencies]
+apodize = "0.2.0"
+jack = "0.5.6"
+goertzel = "0.2.0"
+rust-hsluv = "0.1.3"
