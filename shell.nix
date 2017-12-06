@@ -6,6 +6,7 @@ stdenv.mkDerivation {
         cargo
         jack2Full
         libjack2
+        nodejs
     ];
     shellHook = ''
     '';

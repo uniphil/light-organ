@@ -7,6 +7,8 @@ use apodize::{hanning_iter};
 use jack::prelude as j;
 use std::io;
 
+const buffsize: i16 = 1024;
+
 struct Notifications;
 
 impl j::NotificationHandler for Notifications {
@@ -48,40 +50,61 @@ fn main() {
     let in_a = client
         .register_port("in", j::AudioInSpec::default())
         .unwrap();
+
+    let note_colours: [(f32, f32, f32); 12] = [
+        (1.0, 0.0, 0.0),  // red
+        (1.0, 0.5, 0.0),
+        (1.0, 1.0, 0.0),  // yellow
+        (0.5, 1.0, 0.0),
+        (0.0, 1.0, 0.0),
+        (0.0, 1.0, 0.5),
+        (0.0, 1.0, 1.0),
+        (0.0, 0.5, 1.0),
+        (0.0, 0.0, 1.0),
+        (0.5, 0.0, 1.0),
+        (1.0, 0.0, 1.0),
+        (1.0, 0.0, 0.5),
+    ];
+
     let process_callback = move |_: &j::Client, ps: &j::ProcessScope| -> j::JackControl {
         let in_a_p = j::AudioInPort::new(&in_a, ps);
         let mut note_mags: [f32; 12] = [0.; 12];
-        let windowed = hanning_iter(256)
-            .enumerate()
-            .map(|(i, a)| ((*in_a_p)[i] * 1000. * a as f32) as i16)
-            .collect::<Vec<i16>>();
-        // let windowed = (*in_a_p)
-        //     .iter()
-        //     .map(|x| (x * 1000.) as i16)
+        // let windowed = hanning_iter(256)
+        //     .enumerate()
+        //     .map(|(i, a)| ((*in_a_p)[i] * 1000. * a as f32) as i16)
         //     .collect::<Vec<i16>>();
+        let windowed = (*in_a_p)
+            .iter()
+            .map(|x| (x * 1000.) as i16)
+            .collect::<Vec<i16>>();
         let f_mags = (1..100)
             .map(|n| 440. * 2.0_f32.powf(1./12.).powf(n as f32 - 48.))
-            .filter(|f| *f > 44100. / 256.)
-            .map(|f| goertzel::Parameters::new(f, 44100, 256)
+            .filter(|f| *f > 44100. / buffsize as f32)
+            .map(|f| goertzel::Parameters::new(f, 44100, buffsize as usize)
                     .start()
                     .add(&windowed)
                     .finish_mag());
+        let mut rgb: (f32, f32, f32) = (0.0, 0.0, 0.0);
         for (i, mag) in f_mags.enumerate() {
-            note_mags[(i % 12) as usize] += mag;
+            rgb.0 += mag * note_colours[i % 12].0;
+            rgb.1 += mag * note_colours[i % 12].1;
+            rgb.2 += mag * note_colours[i % 12].2;
         }
-        let graph = note_mags
-            .iter()
-            .map(|m| *m as u32)
-            .map(|m| match m {
-                0 ... 100 => " ",
-                100 ... 1000 => ".",
-                1000 ... 10000 => "o",
-                10000 ... 100000 => "O",
-                _ => "0",
-            })
-            .collect::<Vec<&str>>()
-            .join("");
-        println!("{:?}", graph);
+        // let graph = note_mags
+        //     .iter()
+        //     .map(|m| *m as u32)
+        //     .map(|m| match m {
+        //         0 ... 10 => " ",
+        //         10 ... 100 => "·",
+        //         100 ... 1000 => "░",
+        //         1000 ... 10000 => "▒",
+        //         10000 ... 100000 => "▓",
+        //         _ => "0",
+        //     })
+        //     .collect::<Vec<&str>>()
+        //     .join("");
+        let f = |l: f32| { (l as u32 / 1000).min(255) };
+        println!("{},{},{}", f(rgb.0), f(rgb.1), f(rgb.2));
         // let mag4k = goertzel::Parameters::new(80., 44100, 256)
         //     .start()
         //     .add(&samples)
