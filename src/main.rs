@@ -75,7 +75,7 @@ fn main() {
         //     .collect::<Vec<i16>>();
         let windowed = (*in_a_p)
             .iter()
-            .map(|x| (x * 1000.) as i16)
+            .map(|x| (x * 10000.) as i16)
             .collect::<Vec<i16>>();
         let f_mags = (1..100)
             .map(|n| 440. * 2.0_f32.powf(1./12.).powf(n as f32 - 48.))
