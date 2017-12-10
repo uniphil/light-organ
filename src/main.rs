@@ -9,7 +9,7 @@ use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use std::collections::VecDeque;
-use std::{thread, time};
+use std::{env, thread, time};
 // use std::io;
 
 // const LOWEST_NOTE_FREQ: f32 = 27.5;  // A0
@@ -167,15 +167,20 @@ impl Computer {
 }
 
 fn main() {
-    // Create client
+    let channels = env::args()
+        .nth(1)
+        .unwrap()
+        .parse::<u8>()
+        .unwrap();
+
     let (client, _status) = j::Client::new("colours", j::client_options::NO_START_SERVER)
         .unwrap();
 
     let mut receivers: Vec<JackReceiver> = Vec::new();
     let mut computers: Vec<Computer> = Vec::new();
 
-    for i in 0..2 {
-        let (receiver, computer) = get_channel(&client, &format!("in {}", i+1));
+    for i in 0..channels {
+        let (receiver, computer) = get_channel(&client, &format!("in_{}", i+1));
         receivers.push(receiver);
         computers.push(computer);
     }
