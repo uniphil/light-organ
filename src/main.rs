@@ -52,7 +52,7 @@ const NOTE_COLOURS: [RGB; 12] = [
     RGB { r: 0.0, g: 0.0, b: 1.0 },  // C# blue
     RGB { r: 0.5, g: 0.0, b: 1.0 },  // D  purple
     RGB { r: 1.0, g: 0.0, b: 1.0 },  // Eb magenta
-    RGB { r: 1.0, g: 0.0, b: 0.5 },  // E purpley-red
+    RGB { r: 1.0, g: 0.0, b: 0.5 },  // E  purpley-red
 ];
 
 fn get_window_canvas() -> (sdl2::render::Canvas<sdl2::video::Window>, sdl2::EventPump) {
@@ -155,13 +155,18 @@ impl Computer {
 
     fn get_colour(&self) -> RGB {
         let mut decayed_rgb = RGB::new(0., 0., 0.);
+        let mut total_weight = 1.;
         for i in 0..DECAY_SAMPLES {
             let weight = (1. - (i as f32 / DECAY_SAMPLES as f32)).powf(2.);
+            total_weight += weight;
             let old_rgb = &self.decay_window[i];
             decayed_rgb.r += old_rgb.r * weight;
             decayed_rgb.g += old_rgb.g * weight;
             decayed_rgb.b += old_rgb.b * weight;
         }
+        decayed_rgb.r /= total_weight;
+        decayed_rgb.g /= total_weight;
+        decayed_rgb.b /= total_weight;
         decayed_rgb
     }
 }
