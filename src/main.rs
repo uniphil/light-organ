@@ -19,19 +19,38 @@ const BUFFSIZE: usize = 1024;
 
 const DECAY_SAMPLES: usize = 32;
 
-const NOTE_COLOURS: [(f32, f32, f32); 12] = [
-    (1.0, 0.0, 0.0),  // F  red
-    (1.0, 0.5, 0.0),  // F# orange
-    (1.0, 1.0, 0.0),  // G  yellow
-    (0.5, 1.0, 0.0),  // Ab lime
-    (0.0, 1.0, 0.0),  // A  green
-    (0.0, 1.0, 0.5),  // Bb bluish green
-    (0.0, 1.0, 1.0),  // B  cyan
-    (0.0, 0.5, 1.0),  // C  boring blue
-    (0.0, 0.0, 1.0),  // C# blue
-    (0.5, 0.0, 1.0),  // D  purple
-    (1.0, 0.0, 1.0),  // Eb magenta
-    (1.0, 0.0, 0.5),  // E purpley-red
+struct RGB {
+    r: f32,
+    g: f32,
+    b: f32,
+}
+
+impl RGB {
+    fn new(r: f32, g: f32, b: f32) -> RGB {
+        RGB { r, g, b }
+    }
+}
+
+impl From<RGB> for Color {
+    fn from(rgb: RGB) -> Self {
+        let f = |l: f32| { (l as u32 / 1000).min(255) as u8 };
+        Color::RGB(f(rgb.r), f(rgb.g), f(rgb.b))
+    }
+}
+
+const NOTE_COLOURS: [RGB; 12] = [
+    RGB { r: 1.0, g: 0.0, b: 0.0 },  // F  red
+    RGB { r: 1.0, g: 0.5, b: 0.0 },  // F# orange
+    RGB { r: 1.0, g: 1.0, b: 0.0 },  // G  yellow
+    RGB { r: 0.5, g: 1.0, b: 0.0 },  // Ab lime
+    RGB { r: 0.0, g: 1.0, b: 0.0 },  // A  green
+    RGB { r: 0.0, g: 1.0, b: 0.5 },  // Bb bluish green
+    RGB { r: 0.0, g: 1.0, b: 1.0 },  // B  cyan
+    RGB { r: 0.0, g: 0.5, b: 1.0 },  // C  boring blue
+    RGB { r: 0.0, g: 0.0, b: 1.0 },  // C# blue
+    RGB { r: 0.5, g: 0.0, b: 1.0 },  // D  purple
+    RGB { r: 1.0, g: 0.0, b: 1.0 },  // Eb magenta
+    RGB { r: 1.0, g: 0.0, b: 0.5 },  // E purpley-red
 ];
 
 fn get_window_canvas() -> (sdl2::render::Canvas<sdl2::video::Window>, sdl2::EventPump) {
@@ -60,11 +79,9 @@ fn get_window_canvas() -> (sdl2::render::Canvas<sdl2::video::Window>, sdl2::Even
 fn get_channel(client: &j::Client, name: &str) -> (JackReceiver, Computer) {
     // TODO: accept buffsize as a param?
     let (tx, rx) = lossyq::spsc::channel::<f32>(BUFFSIZE * 4);
-    let jack_in = client
-        .register_port(name, j::AudioInSpec::default())
-        .unwrap();
-    let samples_window: VecDeque<f32> = VecDeque::with_capacity(WINDOW_SIZE);
-    (JackReceiver { tx, jack_in }, Computer { rx, samples_window })
+    let receiver = JackReceiver::new(client, name, tx);
+    let computer = Computer::new(rx);
+    (receiver, computer)
 }
 
 struct JackReceiver {
@@ -72,9 +89,37 @@ struct JackReceiver {
     jack_in: jack::port::Port<j::AudioInSpec>,
 }
 
+impl JackReceiver {
+    fn new(client: &j::Client, name: &str, tx: lossyq::spsc::Sender<f32>) -> JackReceiver {
+        let jack_in = client
+            .register_port(name, j::AudioInSpec::default())
+            .unwrap();
+        JackReceiver {
+            tx,
+            jack_in,
+        }
+    }
+}
+
 struct Computer {
     rx: lossyq::spsc::Receiver<f32>,
+    decay_window: VecDeque<RGB>,
     samples_window: VecDeque<f32>,
+}
+
+impl Computer {
+    fn new(rx: lossyq::spsc::Receiver<f32>) -> Computer {
+        let samples_window: VecDeque<f32> = VecDeque::with_capacity(WINDOW_SIZE);
+        let mut decay_window: VecDeque<RGB> = VecDeque::with_capacity(DECAY_SAMPLES);
+        for _ in 0..DECAY_SAMPLES {
+            decay_window.push_back(RGB::new(0., 0., 0.));
+        }
+        Computer {
+            rx,
+            decay_window,
+            samples_window,
+        }
+    }
 }
 
 fn main() {
@@ -102,15 +147,9 @@ fn main() {
         j::JackControl::Continue
     };
     let process = j::ClosureProcessHandler::new(process_callback);
-
-    // Activate the client, which starts the processing.
     let active_client = j::AsyncClient::new(client, (), process).unwrap();
 
     let (mut canvas, mut events) = get_window_canvas();
-
-    // let mut samples_window: VecDeque<f32> = VecDeque::new();
-    let mut decay_window: [(f32, f32, f32); DECAY_SAMPLES] = [(0., 0., 0.,); DECAY_SAMPLES];
-    let mut decay_window_idx: usize = 0;
 
     'main: loop {
         let computer = &mut computers[0];
@@ -134,32 +173,28 @@ fn main() {
                     .start()
                     .add(&freq_samples)
                     .finish_mag());
-        let mut rgb: (f32, f32, f32) = (0.0, 0.0, 0.0);
+        let mut rgb = RGB { r: 0., g: 0., b: 0. };
         for (i, mag) in freq_mags.enumerate() {
-            rgb.0 += mag * NOTE_COLOURS[i % 12].0;
-            rgb.1 += mag * NOTE_COLOURS[i % 12].1;
-            rgb.2 += mag * NOTE_COLOURS[i % 12].2;
+            rgb.r += mag * NOTE_COLOURS[i % 12].r;
+            rgb.g += mag * NOTE_COLOURS[i % 12].g;
+            rgb.b += mag * NOTE_COLOURS[i % 12].b;
         }
 
-        decay_window[decay_window_idx] = rgb;
-        decay_window_idx = (decay_window_idx + 1) % DECAY_SAMPLES;
+        let decay_window = &mut computer.decay_window;
 
-        let mut decayed_rgb: (f32, f32, f32) = (0., 0., 0.,);
+        decay_window.pop_back();
+        decay_window.push_front(rgb);
+
+        let mut decayed_rgb = RGB::new(0., 0., 0.);
         for i in 0..DECAY_SAMPLES {
             let weight = (1. - (i as f32 / DECAY_SAMPLES as f32)).powf(2.);
-            let window_idx = (decay_window_idx + DECAY_SAMPLES - i) % DECAY_SAMPLES;
-            let old_rgb = decay_window[window_idx];
-            decayed_rgb.0 += old_rgb.0 * weight * weight;
-            decayed_rgb.1 += old_rgb.1 * weight * weight;
-            decayed_rgb.2 += old_rgb.2 * weight * weight;
-            // let old_rgb = decay_window[((decay_window_idx * 2) as i64 - i % DECAY_SAMPLES) as usize];
+            let old_rgb = &decay_window[i];
+            decayed_rgb.r += old_rgb.r * weight;
+            decayed_rgb.g += old_rgb.g * weight;
+            decayed_rgb.b += old_rgb.b * weight;
         }
-        decayed_rgb.0 /= DECAY_SAMPLES as f32;
-        decayed_rgb.1 /= DECAY_SAMPLES as f32;
-        decayed_rgb.2 /= DECAY_SAMPLES as f32;
 
-        let f = |l: f32| { (l as u32 / 1000).min(255) as u8 };
-        canvas.set_draw_color(Color::RGB(f(decayed_rgb.0), f(decayed_rgb.1), f(decayed_rgb.2)));
+        canvas.set_draw_color(Color::from(decayed_rgb));
         canvas.clear();
         canvas.present();
 
