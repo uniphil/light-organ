@@ -35,7 +35,7 @@ impl RGB {
 
 impl From<RGB> for Color {
     fn from(rgb: RGB) -> Self {
-        let f = |l: f32| { (l as u32 / 1000).min(255) as u8 };
+        let f = |l: f32| { (l as u32 / 2000).min(255) as u8 };
         Color::RGB(f(rgb.r), f(rgb.g), f(rgb.b))
     }
 }
