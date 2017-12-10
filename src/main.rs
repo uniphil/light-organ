@@ -7,6 +7,7 @@ use jack::prelude as j;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
+use sdl2::rect::Rect;
 use std::collections::VecDeque;
 use std::{thread, time};
 // use std::io;
@@ -19,6 +20,7 @@ const BUFFSIZE: usize = 1024;
 
 const DECAY_SAMPLES: usize = 32;
 
+#[derive(Debug)]
 struct RGB {
     r: f32,
     g: f32,
@@ -70,7 +72,7 @@ fn get_window_canvas() -> (sdl2::render::Canvas<sdl2::video::Window>, sdl2::Even
         .build()
         .unwrap();
     let events = sdl_context.event_pump().unwrap();
-    canvas.set_draw_color(Color::RGB(255, 200, 0));
+    canvas.set_draw_color(Color::RGB(0, 0, 0));
     canvas.clear();
     canvas.present();
     (canvas, events)
@@ -120,6 +122,48 @@ impl Computer {
             samples_window,
         }
     }
+
+    fn update(&mut self) {
+        for sample in self.rx.iter() {
+            self.samples_window.push_back(sample);
+            if self.samples_window.len() > WINDOW_SIZE {
+                self.samples_window.pop_front();
+            }
+        }
+        let freq_samples = self.samples_window
+            .iter()
+            .rev()
+            .take(BUFFSIZE)
+            .map(|x| (x * 1000.) as i16)
+            .collect::<Vec<i16>>();
+        let freq_mags = (1..100)
+            .map(|n| 440. * 2.0_f32.powf(1./12.).powf(n as f32 - 48.))
+            .filter(|f| *f > 44100. / BUFFSIZE as f32)
+            .map(|f| goertzel::Parameters::new(f, 44100, BUFFSIZE as usize)
+                    .start()
+                    .add(&freq_samples)
+                    .finish_mag());
+        let mut rgb = RGB { r: 0., g: 0., b: 0. };
+        for (i, mag) in freq_mags.enumerate() {
+            rgb.r += mag * NOTE_COLOURS[i % 12].r;
+            rgb.g += mag * NOTE_COLOURS[i % 12].g;
+            rgb.b += mag * NOTE_COLOURS[i % 12].b;
+        }
+        self.decay_window.pop_back();
+        self.decay_window.push_front(rgb);
+    }
+
+    fn get_colour(&self) -> RGB {
+        let mut decayed_rgb = RGB::new(0., 0., 0.);
+        for i in 0..DECAY_SAMPLES {
+            let weight = (1. - (i as f32 / DECAY_SAMPLES as f32)).powf(2.);
+            let old_rgb = &self.decay_window[i];
+            decayed_rgb.r += old_rgb.r * weight;
+            decayed_rgb.g += old_rgb.g * weight;
+            decayed_rgb.b += old_rgb.b * weight;
+        }
+        decayed_rgb
+    }
 }
 
 fn main() {
@@ -130,7 +174,7 @@ fn main() {
     let mut receivers: Vec<JackReceiver> = Vec::new();
     let mut computers: Vec<Computer> = Vec::new();
 
-    for i in 0..1 {
+    for i in 0..2 {
         let (receiver, computer) = get_channel(&client, &format!("in {}", i+1));
         receivers.push(receiver);
         computers.push(computer);
@@ -152,50 +196,27 @@ fn main() {
     let (mut canvas, mut events) = get_window_canvas();
 
     'main: loop {
-        let computer = &mut computers[0];
-        for sample in computer.rx.iter() {
-            computer.samples_window.push_back(sample);
-            if computer.samples_window.len() > WINDOW_SIZE {
-                computer.samples_window.pop_front();
-            }
+        for computer in &mut computers {
+            computer.update();
         }
-
-        let freq_samples = computer.samples_window
+        let colours = computers
             .iter()
-            .rev()
-            .take(BUFFSIZE)
-            .map(|x| (x * 1000.) as i16)
-            .collect::<Vec<i16>>();
-        let freq_mags = (1..100)
-            .map(|n| 440. * 2.0_f32.powf(1./12.).powf(n as f32 - 48.))
-            .filter(|f| *f > 44100. / BUFFSIZE as f32)
-            .map(|f| goertzel::Parameters::new(f, 44100, BUFFSIZE as usize)
-                    .start()
-                    .add(&freq_samples)
-                    .finish_mag());
-        let mut rgb = RGB { r: 0., g: 0., b: 0. };
-        for (i, mag) in freq_mags.enumerate() {
-            rgb.r += mag * NOTE_COLOURS[i % 12].r;
-            rgb.g += mag * NOTE_COLOURS[i % 12].g;
-            rgb.b += mag * NOTE_COLOURS[i % 12].b;
-        }
+            .map(Computer::get_colour)
+            .map(Color::from);
 
-        let decay_window = &mut computer.decay_window;
-
-        decay_window.pop_back();
-        decay_window.push_front(rgb);
-
-        let mut decayed_rgb = RGB::new(0., 0., 0.);
-        for i in 0..DECAY_SAMPLES {
-            let weight = (1. - (i as f32 / DECAY_SAMPLES as f32)).powf(2.);
-            let old_rgb = &decay_window[i];
-            decayed_rgb.r += old_rgb.r * weight;
-            decayed_rgb.g += old_rgb.g * weight;
-            decayed_rgb.b += old_rgb.b * weight;
-        }
-
-        canvas.set_draw_color(Color::from(decayed_rgb));
+        canvas.set_draw_color(Color::RGB(0, 0, 0));
         canvas.clear();
+
+        let (w, h) = canvas.window().size();
+        let rects = computers.len() as u32;
+        let rect_width = w / rects;
+
+        for (i, colour) in colours.enumerate() {
+            canvas.set_draw_color(colour);
+            canvas
+                .fill_rect(Rect::new(i as i32 * rect_width as i32, 0, rect_width, h))
+                .unwrap();
+        }
         canvas.present();
 
         for event in events.poll_iter() {
