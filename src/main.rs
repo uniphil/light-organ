@@ -57,26 +57,47 @@ fn get_window_canvas() -> (sdl2::render::Canvas<sdl2::video::Window>, sdl2::Even
     (canvas, events)
 }
 
+fn get_channel(client: &j::Client, name: &str) -> (JackReceiver, Computer) {
+    // TODO: accept buffsize as a param?
+    let (tx, rx) = lossyq::spsc::channel::<f32>(BUFFSIZE * 4);
+    let jack_in = client
+        .register_port(name, j::AudioInSpec::default())
+        .unwrap();
+    let samples_window: VecDeque<f32> = VecDeque::with_capacity(WINDOW_SIZE);
+    (JackReceiver { tx, jack_in }, Computer { rx, samples_window })
+}
+
+struct JackReceiver {
+    tx: lossyq::spsc::Sender<f32>,
+    jack_in: jack::port::Port<j::AudioInSpec>,
+}
+
+struct Computer {
+    rx: lossyq::spsc::Receiver<f32>,
+    samples_window: VecDeque<f32>,
+}
+
 fn main() {
-
-    // set up a buffer to hold recent audio samples
-    let (mut tx, mut rx) = lossyq::spsc::channel::<f32>(BUFFSIZE * 4);
-
     // Create client
     let (client, _status) = j::Client::new("colours", j::client_options::NO_START_SERVER)
         .unwrap();
 
-    // Register ports. They will be used in a callback that will be
-    // called when new data is available.
-    let in_a = client
-        .register_port("in", j::AudioInSpec::default())
-        .unwrap();
+    let mut receivers: Vec<JackReceiver> = Vec::new();
+    let mut computers: Vec<Computer> = Vec::new();
+
+    for i in 0..1 {
+        let (receiver, computer) = get_channel(&client, &format!("in {}", i+1));
+        receivers.push(receiver);
+        computers.push(computer);
+    }
 
     let process_callback = move |_: &j::Client, ps: &j::ProcessScope| -> j::JackControl {
         // just copy stuff to a non-allocating buffer, overwriting old stuff
-        let in_a_p = j::AudioInPort::new(&in_a, ps);
-        for v in in_a_p.iter() {
-            tx.put(|x| *x = Some(*v));
+        for receiver in &mut receivers {
+            let channel_in = j::AudioInPort::new(&receiver.jack_in, ps);
+            for v in channel_in.iter() {
+                receiver.tx.put(|x| *x = Some(*v));
+            }
         }
         j::JackControl::Continue
     };
@@ -87,19 +108,20 @@ fn main() {
 
     let (mut canvas, mut events) = get_window_canvas();
 
-    let mut samples_window: VecDeque<f32> = VecDeque::new();
+    // let mut samples_window: VecDeque<f32> = VecDeque::new();
     let mut decay_window: [(f32, f32, f32); DECAY_SAMPLES] = [(0., 0., 0.,); DECAY_SAMPLES];
     let mut decay_window_idx: usize = 0;
 
     'main: loop {
-        for sample in rx.iter() {
-            samples_window.push_back(sample);
-            if samples_window.len() > WINDOW_SIZE {
-                samples_window.pop_front();
+        let computer = &mut computers[0];
+        for sample in computer.rx.iter() {
+            computer.samples_window.push_back(sample);
+            if computer.samples_window.len() > WINDOW_SIZE {
+                computer.samples_window.pop_front();
             }
         }
 
-        let freq_samples = samples_window
+        let freq_samples = computer.samples_window
             .iter()
             .rev()
             .take(BUFFSIZE)
@@ -132,9 +154,9 @@ fn main() {
             decayed_rgb.2 += old_rgb.2 * weight * weight;
             // let old_rgb = decay_window[((decay_window_idx * 2) as i64 - i % DECAY_SAMPLES) as usize];
         }
-        decayed_rgb.0 /= DECAY_SAMPLES as f32 / 4.;
-        decayed_rgb.1 /= DECAY_SAMPLES as f32 / 4.;
-        decayed_rgb.2 /= DECAY_SAMPLES as f32 / 4.;
+        decayed_rgb.0 /= DECAY_SAMPLES as f32;
+        decayed_rgb.1 /= DECAY_SAMPLES as f32;
+        decayed_rgb.2 /= DECAY_SAMPLES as f32;
 
         let f = |l: f32| { (l as u32 / 1000).min(255) as u8 };
         canvas.set_draw_color(Color::RGB(f(decayed_rgb.0), f(decayed_rgb.1), f(decayed_rgb.2)));
