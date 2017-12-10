@@ -19,6 +19,43 @@ const BUFFSIZE: usize = 1024;
 
 const DECAY_SAMPLES: usize = 32;
 
+const NOTE_COLOURS: [(f32, f32, f32); 12] = [
+    (1.0, 0.0, 0.0),  // F  red
+    (1.0, 0.5, 0.0),  // F# orange
+    (1.0, 1.0, 0.0),  // G  yellow
+    (0.5, 1.0, 0.0),  // Ab lime
+    (0.0, 1.0, 0.0),  // A  green
+    (0.0, 1.0, 0.5),  // Bb bluish green
+    (0.0, 1.0, 1.0),  // B  cyan
+    (0.0, 0.5, 1.0),  // C  boring blue
+    (0.0, 0.0, 1.0),  // C# blue
+    (0.5, 0.0, 1.0),  // D  purple
+    (1.0, 0.0, 1.0),  // Eb magenta
+    (1.0, 0.0, 0.5),  // E purpley-red
+];
+
+fn get_window_canvas() -> (sdl2::render::Canvas<sdl2::video::Window>, sdl2::EventPump) {
+    let sdl_context = sdl2::init()
+        .unwrap();
+    let video_subsystem = sdl_context
+        .video()
+        .unwrap();
+    let window = video_subsystem.window("colours", 800, 600)
+        .resizable()
+        .position_centered()
+        .build()
+        .unwrap();
+    let mut canvas = window
+        .into_canvas()
+        .present_vsync()
+        .build()
+        .unwrap();
+    let events = sdl_context.event_pump().unwrap();
+    canvas.set_draw_color(Color::RGB(255, 200, 0));
+    canvas.clear();
+    canvas.present();
+    (canvas, events)
+}
 
 fn main() {
 
@@ -35,22 +72,8 @@ fn main() {
         .register_port("in", j::AudioInSpec::default())
         .unwrap();
 
-    let note_colours: [(f32, f32, f32); 12] = [
-        (1.0, 0.0, 0.0),  // red
-        (1.0, 0.5, 0.0),  // orange
-        (1.0, 1.0, 0.0),  // yellow
-        (0.5, 1.0, 0.0),  // lime
-        (0.0, 1.0, 0.0),  // green
-        (0.0, 1.0, 0.5),  // bluish green
-        (0.0, 1.0, 1.0),  // cyan
-        (0.0, 0.5, 1.0),  // greenish blue
-        (0.0, 0.0, 1.0),  // blue
-        (0.5, 0.0, 1.0),  // purple
-        (1.0, 0.0, 1.0),  // magenta
-        (1.0, 0.0, 0.5),  // purpley-red
-    ];
-
     let process_callback = move |_: &j::Client, ps: &j::ProcessScope| -> j::JackControl {
+        // just copy stuff to a non-allocating buffer, overwriting old stuff
         let in_a_p = j::AudioInPort::new(&in_a, ps);
         for v in in_a_p.iter() {
             tx.put(|x| *x = Some(*v));
@@ -62,19 +85,7 @@ fn main() {
     // Activate the client, which starts the processing.
     let active_client = j::AsyncClient::new(client, (), process).unwrap();
 
-    // Wait for user input to quit
-    let sdl_context = sdl2::init().unwrap();
-    let video_subsystem = sdl_context.video().unwrap();
-    let window = video_subsystem.window("colours", 800, 600)
-        .resizable()
-        .position_centered()
-        .build()
-        .unwrap();
-    let mut canvas = window.into_canvas().build().unwrap();
-    let mut events = sdl_context.event_pump().unwrap();
-    canvas.set_draw_color(Color::RGB(255, 200, 0));
-    canvas.clear();
-    canvas.present();
+    let (mut canvas, mut events) = get_window_canvas();
 
     let mut samples_window: VecDeque<f32> = VecDeque::new();
     let mut decay_window: [(f32, f32, f32); DECAY_SAMPLES] = [(0., 0., 0.,); DECAY_SAMPLES];
@@ -103,9 +114,9 @@ fn main() {
                     .finish_mag());
         let mut rgb: (f32, f32, f32) = (0.0, 0.0, 0.0);
         for (i, mag) in freq_mags.enumerate() {
-            rgb.0 += mag * note_colours[i % 12].0;
-            rgb.1 += mag * note_colours[i % 12].1;
-            rgb.2 += mag * note_colours[i % 12].2;
+            rgb.0 += mag * NOTE_COLOURS[i % 12].0;
+            rgb.1 += mag * NOTE_COLOURS[i % 12].1;
+            rgb.2 += mag * NOTE_COLOURS[i % 12].2;
         }
 
         decay_window[decay_window_idx] = rgb;
@@ -113,7 +124,7 @@ fn main() {
 
         let mut decayed_rgb: (f32, f32, f32) = (0., 0., 0.,);
         for i in 0..DECAY_SAMPLES {
-            let weight = 1. - (i as f32 / DECAY_SAMPLES as f32);
+            let weight = (1. - (i as f32 / DECAY_SAMPLES as f32)).powf(2.);
             let window_idx = (decay_window_idx + DECAY_SAMPLES - i) % DECAY_SAMPLES;
             let old_rgb = decay_window[window_idx];
             decayed_rgb.0 += old_rgb.0 * weight * weight;
