@@ -28,7 +28,7 @@ struct RGB {
 }
 
 impl RGB {
-    fn new(r: f32, g: f32, b: f32) -> RGB {
+    fn new(r: f32, g: f32, b: f32) -> Self {
         RGB { r, g, b }
     }
 }
@@ -158,7 +158,7 @@ struct JackReceiver {
 }
 
 impl JackReceiver {
-    fn new(client: &j::Client, name: &str, tx: lossyq::spsc::Sender<f32>) -> JackReceiver {
+    fn new(client: &j::Client, name: &str, tx: lossyq::spsc::Sender<f32>) -> Self {
         let jack_in = client
             .register_port(name, j::AudioInSpec::default())
             .unwrap();
@@ -176,7 +176,7 @@ struct Computer {
 }
 
 impl Computer {
-    fn new(rx: lossyq::spsc::Receiver<f32>) -> Computer {
+    fn new(rx: lossyq::spsc::Receiver<f32>) -> Self {
         let samples_window: VecDeque<f32> = VecDeque::with_capacity(WINDOW_SIZE);
         let mut decay_window: VecDeque<RGB> = VecDeque::with_capacity(DECAY_SAMPLES);
         for _ in 0..DECAY_SAMPLES {
