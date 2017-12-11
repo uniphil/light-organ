@@ -40,6 +40,7 @@ impl From<RGB> for Color {
     }
 }
 
+// simple, rooted at red for key of F
 const NOTE_COLOURS: [RGB; 12] = [
     RGB { r: 1.0, g: 0.0, b: 0.0 },  // F  red
     RGB { r: 1.0, g: 0.5, b: 0.0 },  // F# orange
@@ -54,6 +55,71 @@ const NOTE_COLOURS: [RGB; 12] = [
     RGB { r: 1.0, g: 0.0, b: 1.0 },  // Eb magenta
     RGB { r: 1.0, g: 0.0, b: 0.5 },  // E  purpley-red
 ];
+
+// // circle of fifths for key of C
+// const NOTE_COLOURS: [RGB; 12] = [
+//     RGB { r: 1.0, g: 0.0, b: 0.0 },  // F  red
+//     RGB { r: 0.0, g: 0.5, b: 1.0 },  // F# boring blue
+//     RGB { r: 1.0, g: 1.0, b: 0.0 },  // G  yellow
+//     RGB { r: 0.5, g: 0.0, b: 1.0 },  // Ab purple
+//     RGB { r: 0.0, g: 1.0, b: 0.0 },  // A  green
+//     RGB { r: 1.0, g: 0.0, b: 0.5 },  // Bb purpley-red
+//     RGB { r: 0.0, g: 1.0, b: 1.0 },  // B  cyan
+//     RGB { r: 1.0, g: 0.5, b: 0.0 },  // C  orange
+//     RGB { r: 0.0, g: 0.0, b: 1.0 },  // C# blue
+//     RGB { r: 0.5, g: 1.0, b: 0.0 },  // D  lime
+//     RGB { r: 1.0, g: 0.0, b: 1.0 },  // Eb magenta
+//     RGB { r: 0.0, g: 1.0, b: 0.5 },  // E  bluish green
+// ];
+
+// // circle of fifths for key of C
+// const NOTE_COLOURS: [RGB; 12] = [
+//     RGB { r: 1.0, g: 0.0, b: 0.0 },  // F  red
+//     RGB { r: 0.0, g: 0.0, b: 0.0 },  // F# (off) boring blue
+//     RGB { r: 1.0, g: 1.0, b: 0.0 },  // G  yellow
+//     RGB { r: 0.0, g: 0.0, b: 0.0 },  // Ab (off) purple
+//     RGB { r: 0.0, g: 1.0, b: 0.0 },  // A  green
+//     RGB { r: 0.0, g: 0.0, b: 0.0 },  // Bb (off) purpley-red
+//     RGB { r: 0.0, g: 1.0, b: 1.0 },  // B  cyan
+//     RGB { r: 1.0, g: 0.5, b: 0.0 },  // C  orange
+//     RGB { r: 0.0, g: 0.0, b: 0.0 },  // C# (off) blue
+//     RGB { r: 0.5, g: 1.0, b: 0.0 },  // D  lime
+//     RGB { r: 0.0, g: 0.0, b: 0.0 },  // Eb (off) magenta
+//     RGB { r: 0.0, g: 1.0, b: 0.5 },  // E  bluish green
+// ];
+
+// // whole tone near-complements
+// const NOTE_COLOURS: [RGB; 12] = [
+//     RGB { r: 1.0, g: 0.0, b: 0.0 },  // F  red
+//     RGB { r: 0.0, g: 0.0, b: 0.0 },  // F# (off)
+//     RGB { r: 0.0, g: 0.5, b: 1.0 },  // G  boring blue
+//     RGB { r: 0.0, g: 0.0, b: 0.0 },  // Ab (off)
+//     RGB { r: 0.0, g: 1.0, b: 0.0 },  // A  green
+//     RGB { r: 0.0, g: 0.0, b: 0.0 },  // Bb (off)
+//     RGB { r: 1.0, g: 0.0, b: 0.5 },  // B  purpley red
+//     RGB { r: 0.0, g: 0.0, b: 0.0 },  // C  (off)
+//     RGB { r: 1.0, g: 0.5, b: 0.0 },  // C# orange
+//     RGB { r: 0.0, g: 0.0, b: 0.0 },  // D  (off)
+//     RGB { r: 0.0, g: 0.0, b: 1.0 },  // Eb blue
+//     RGB { r: 0.0, g: 0.0, b: 0.0 },  // E  (off)
+// ];
+
+// // two cycles per octave
+// const NOTE_COLOURS: [RGB; 12] = [
+//     RGB { r: 1.0, g: 0.0, b: 0.0 },  // F  red
+//     RGB { r: 1.0, g: 1.0, b: 0.0 },  // F# yellow
+//     RGB { r: 0.0, g: 1.0, b: 0.0 },  // G  green
+//     RGB { r: 0.0, g: 1.0, b: 1.0 },  // Ab cyan
+//     RGB { r: 0.0, g: 0.0, b: 1.0 },  // A  blue
+//     RGB { r: 1.0, g: 0.0, b: 1.0 },  // Bb magenta
+//     RGB { r: 1.0, g: 0.0, b: 0.0 },  // B  red
+//     RGB { r: 1.0, g: 1.0, b: 0.0 },  // C  yellow
+//     RGB { r: 0.0, g: 1.0, b: 0.0 },  // C# green
+//     RGB { r: 0.0, g: 1.0, b: 1.0 },  // D  cyan
+//     RGB { r: 0.0, g: 0.0, b: 1.0 },  // Eb blue
+//     RGB { r: 1.0, g: 0.0, b: 1.5 },  // E  magenta
+// ];
+
 
 fn get_window_canvas() -> (sdl2::render::Canvas<sdl2::video::Window>, sdl2::EventPump) {
     let sdl_context = sdl2::init()
