@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["phil <uniphil@gmail.com>"]
 
 [dependencies]
-goertzel = "0.2.0"
+goertzel = { git = "https://github.com/uniphil/goertzel", branch = "f32-samples" }
 jack = "0.5.6"
 lossyq = "0.1.19"
 rust-hsluv = "0.1.3"

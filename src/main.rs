@@ -35,7 +35,7 @@ impl RGB {
 
 impl From<RGB> for Color {
     fn from(rgb: RGB) -> Self {
-        let f = |l: f32| { (l as u32 / 2000).min(255) as u8 };
+        let f = |l: f32| l.min(255.) as u8;
         Color::RGB(f(rgb.r), f(rgb.g), f(rgb.b))
     }
 }
@@ -200,15 +200,13 @@ impl Computer {
             .iter()
             .rev()
             .take(BUFFSIZE)
-            .map(|x| (x * 1000.) as i16)
-            .collect::<Vec<i16>>();
+            .map(|s| *s)
+            .collect::<Vec<_>>();
         let freq_mags = (1..100)
             .map(|n| 440. * 2.0_f32.powf(1./12.).powf(n as f32 - 48.))
             .filter(|f| *f > 44100. / BUFFSIZE as f32)
             .map(|f| goertzel::Parameters::new(f, 44100, BUFFSIZE as usize)
-                    .start()
-                    .add(&freq_samples)
-                    .finish_mag());
+                    .mag(&freq_samples));
         let mut rgb = RGB { r: 0., g: 0., b: 0. };
         for (i, mag) in freq_mags.enumerate() {
             rgb.r += mag * NOTE_COLOURS[i % 12].r;
