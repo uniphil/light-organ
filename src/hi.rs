@@ -31,7 +31,7 @@ impl Goertz16 {
         let mut q1 = 0.0;
         let mut q0;
         for sample in samples {
-            q0 = self.coeff * q1 - q2 * (*sample as f64);
+            q0 = self.coeff * q1 - q2 + (*sample as f64);
             q2 = q1;
             q1 = q0;
         }
@@ -71,7 +71,6 @@ const OCTAVE_BASE: u32 = 16;
 const NOTES: usize = (OCTAVE_BASE * 9) as usize;
 
 pub struct Glt {
-    samples: [f32; BASE_N],
     filters: [(f64, Box<[f64]>, Goertz16); NOTES],
 }
 
@@ -88,33 +87,42 @@ impl Glt {
             filters[g] = (target, window, Goertz16::new(n));
         }
         Glt {
-            samples: [0.0; BASE_N],
             filters,
         }
     }
 
-    pub fn process(&self, min_samples: usize) -> [(f64, f64); NOTES] {
+    pub fn process(&self, samples: &[f32], min_samples: usize) -> [(f64, f64); NOTES] {
         let mut mags: [(f64, f64); NOTES] = unsafe { mem::uninitialized() };
         for (i, (f, window, goertz)) in self.filters.iter().enumerate() {
-            let mut accumulated_magnitude = 0.0;
-            let mut runs = 0;
-            for i in 0..(min_samples / (goertz.n / 2)) {
-                let start = i * goertz.n / 2;
-                let end = start + goertz.n;
-                if end > BASE_N {
-                    continue
-                }
-                let samples: Vec<f32> = self.samples[start..end]
-                    .iter()
-                    .zip(window.iter())
-                    .map(|(s, a)| (*s as f64 * a) as f32)
-                    .collect();
-                let mag = goertz.magnitude(&*samples);
-                accumulated_magnitude += mag;
-                runs += 1;
-            }
-            let magnitude = accumulated_magnitude / runs as f64;
-            mags[i] = (*f, magnitude);
+            // let mut accumulated_magnitude = 0.0;
+            let mut mag = 0.0;
+            // let mut runs = 0;
+            // let i = 1;
+            // {
+            //     let start = 0;
+            //     let end = start + goertz.n;
+            //     if end > BASE_N {
+            //         println!("wat {:?}", end);
+            //         continue
+            //     }
+            //     // let samples = 
+            //     // let samples: Vec<f32> = samples[start..end]
+            //     //     .iter()
+            //     //     .zip(window.iter())
+            //     //     .map(|(s, _a)| *s)  // (*s as f64 * a) as f32)
+            //     //     .collect();
+            //     // println!("{:?}", samples);
+            //     // mag = goertz.magnitude(&samples[start..end]);
+            //     // accumulated_magnitude += mag;
+            //     // runs += 1;
+            // }
+            let mag = goertz.magnitude(&samples[0..goertz.n]);
+            // println!("SAMPLES {:?}, MAG {:?}", &samples[0..goertz.n][10], mag);
+            // if (mag > 0.0001) {
+            //     println!("heya!");
+            // }
+            // let magnitude = accumulated_magnitude / runs as f64;
+            mags[i] = (*f, mag);
         }
         mags
     }

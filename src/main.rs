@@ -24,38 +24,58 @@ const DECAY_SAMPLES: usize = 32;
 
 #[derive(Debug)]
 struct RGB {
-    r: f32,
-    g: f32,
-    b: f32,
+    r: f64,
+    g: f64,
+    b: f64,
 }
 
 impl RGB {
-    fn new(r: f32, g: f32, b: f32) -> Self {
+    fn new(r: f64, g: f64, b: f64) -> Self {
         RGB { r, g, b }
     }
 }
 
 impl From<RGB> for Color {
     fn from(rgb: RGB) -> Self {
-        let f = |l: f32| l.min(255.) as u8;
+        let f = |l: f64| l.min(255.) as u8;
         Color::RGB(f(rgb.r), f(rgb.g), f(rgb.b))
     }
 }
 
-// simple, rooted at red for key of F
-const NOTE_COLOURS: [RGB; 12] = [
-    RGB { r: 1.0, g: 0.0, b: 0.0 },  // F  red
-    RGB { r: 1.0, g: 0.5, b: 0.0 },  // F# orange
-    RGB { r: 1.0, g: 1.0, b: 0.0 },  // G  yellow
-    RGB { r: 0.5, g: 1.0, b: 0.0 },  // Ab lime
-    RGB { r: 0.0, g: 1.0, b: 0.0 },  // A  green
-    RGB { r: 0.0, g: 1.0, b: 0.5 },  // Bb bluish green
-    RGB { r: 0.0, g: 1.0, b: 1.0 },  // B  cyan
-    RGB { r: 0.0, g: 0.5, b: 1.0 },  // C  boring blue
-    RGB { r: 0.0, g: 0.0, b: 1.0 },  // C# blue
-    RGB { r: 0.5, g: 0.0, b: 1.0 },  // D  purple
-    RGB { r: 1.0, g: 0.0, b: 1.0 },  // Eb magenta
-    RGB { r: 1.0, g: 0.0, b: 0.5 },  // E  purpley-red
+// // simple, rooted at red for key of F
+// const NOTE_COLOURS: [RGB; 12] = [
+//     RGB { r: 1.0, g: 0.0, b: 0.0 },  // F  red
+//     RGB { r: 1.0, g: 0.5, b: 0.0 },  // F# orange
+//     RGB { r: 1.0, g: 1.0, b: 0.0 },  // G  yellow
+//     RGB { r: 0.5, g: 1.0, b: 0.0 },  // Ab lime
+//     RGB { r: 0.0, g: 1.0, b: 0.0 },  // A  green
+//     RGB { r: 0.0, g: 1.0, b: 0.5 },  // Bb bluish green
+//     RGB { r: 0.0, g: 1.0, b: 1.0 },  // B  cyan
+//     RGB { r: 0.0, g: 0.5, b: 1.0 },  // C  boring blue
+//     RGB { r: 0.0, g: 0.0, b: 1.0 },  // C# blue
+//     RGB { r: 0.5, g: 0.0, b: 1.0 },  // D  purple
+//     RGB { r: 1.0, g: 0.0, b: 1.0 },  // Eb magenta
+//     RGB { r: 1.0, g: 0.0, b: 0.5 },  // E  purpley-red
+// ];
+
+// 16
+const NOTE_COLOURS: [RGB; 16] = [
+    RGB { r: 1.0,   g: 0.0,   b: 0.0   },
+    RGB { r: 1.0,   g: 0.376, b: 0.0   },
+    RGB { r: 1.0,   g: 0.749, b: 0.0   },
+    RGB { r: 0.875, g: 1.0,   b: 0.0   },
+    RGB { r: 0.502, g: 1.0,   b: 0.0   },
+    RGB { r: 0.125, g: 1.0,   b: 0.0   },
+    RGB { r: 0.0,   g: 1.0,   b: 0.251 },
+    RGB { r: 0.0,   g: 1.0,   b: 0.624 },
+    RGB { r: 0.0,   g: 1.0,   b: 1.0   },
+    RGB { r: 0.0,   g: 0.624, b: 1.0   },
+    RGB { r: 0.0,   g: 0.251, b: 1.0   },
+    RGB { r: 0.125, g: 0.0,   b: 1.0   },
+    RGB { r: 0.502, g: 0.0,   b: 1.0   },
+    RGB { r: 0.875, g: 0.0,   b: 1.0   },
+    RGB { r: 1.0,   g: 0.0,   b: 0.749 },
+    RGB { r: 1.0,   g: 0.0,   b: 0.376 },
 ];
 
 // // circle of fifths for key of C
@@ -173,44 +193,56 @@ impl JackReceiver {
 
 struct Computer {
     rx: lossyq::spsc::Receiver<f32>,
+    glt: Glt,
     decay_window: VecDeque<RGB>,
     samples_window: VecDeque<f32>,
 }
 
 impl Computer {
     fn new(rx: lossyq::spsc::Receiver<f32>) -> Self {
-        let samples_window: VecDeque<f32> = VecDeque::with_capacity(WINDOW_SIZE);
+        let mut samples_window: VecDeque<f32> = VecDeque::with_capacity(WINDOW_SIZE);
         let mut decay_window: VecDeque<RGB> = VecDeque::with_capacity(DECAY_SAMPLES);
         for _ in 0..DECAY_SAMPLES {
             decay_window.push_back(RGB::new(0., 0., 0.));
         }
+        for _ in 0..WINDOW_SIZE {
+            samples_window.push_back(0.0);
+        }
+        let glt = Glt::new();
         Computer {
             rx,
+            glt,
             decay_window,
             samples_window,
         }
     }
 
     fn update(&mut self) {
+        let mut min_samples = 0;
         for sample in self.rx.iter() {
             self.samples_window.push_back(sample);
             if self.samples_window.len() > WINDOW_SIZE {
                 self.samples_window.pop_front();
             }
+            min_samples += 1;
         }
-        let freq_samples = self.samples_window
-            .iter()
-            .rev()
-            .take(BUFFSIZE)
-            .map(|s| *s)
-            .collect::<Vec<_>>();
-        let freq_mags = (1..100)
-            .map(|n| 440. * 2.0_f32.powf(1./12.).powf(n as f32 - 48.))
-            .filter(|f| *f > 44100. / BUFFSIZE as f32)
-            .map(|f| goertzel::Parameters::new(f, 44100, BUFFSIZE as usize)
-                    .mag(&freq_samples));
+        // bleh
+        let contig_samples: Vec<f32> = self.samples_window.iter().map(|s| *s).collect();
+        let mags: [(f64, f64); 144] = self.glt.process(&*contig_samples, min_samples);
+        // let freq_samples = self.samples_window
+        //     .iter()
+        //     .rev()
+        //     .take(BUFFSIZE)
+        //     .map(|s| *s)
+        //     .collect::<Vec<_>>();
+        // let freq_mags = (1..100)
+        //     .map(|n| 440. * 2.0_f32.powf(1./12.).powf(n as f32 - 48.))
+        //     .filter(|f| *f > 44100. / BUFFSIZE as f32)
+        //     .map(|f| goertzel::Parameters::new(f, 44100, BUFFSIZE as usize)
+        //             .mag(&freq_samples));
+
         let mut rgb = RGB { r: 0., g: 0., b: 0. };
-        for (i, mag) in freq_mags.enumerate() {
+        for (i, (_f, mag)) in mags.iter().enumerate() {
             rgb.r += mag * NOTE_COLOURS[i % 12].r;
             rgb.g += mag * NOTE_COLOURS[i % 12].g;
             rgb.b += mag * NOTE_COLOURS[i % 12].b;
@@ -223,7 +255,7 @@ impl Computer {
         let mut decayed_rgb = RGB::new(0., 0., 0.);
         let mut total_weight = 1.;
         for i in 0..DECAY_SAMPLES {
-            let weight = (1. - (i as f32 / DECAY_SAMPLES as f32)).powf(2.);
+            let weight = (1. - (i as f64 / DECAY_SAMPLES as f64)).powf(2.);
             total_weight += weight;
             let old_rgb = &self.decay_window[i];
             decayed_rgb.r += old_rgb.r * weight;
