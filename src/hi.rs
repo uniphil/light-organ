@@ -1,22 +1,20 @@
 // https://www.embedded.com/design/configurable-systems/4024443/The-Goertzel-Algorithm
 
-struct Goertz {
-    pub f: f64,
+struct Goertz16 {
     pub n: usize,
     cosine: f64,
     sine: f64,
     coeff: f64,
 }
 
-impl Goertz {
-    pub fn new(n: usize, target: f64, rate: u32) -> Goertz {
-        let k = (0.5 + (n as f64) * target / (rate as f64)).floor();
+impl Goertz16 {
+    pub fn new(n: usize) -> Goertz16 {
+        let k = 23.0;  // we always want the 23rd bin
         let w = 2.0 * std::f64::consts::PI / (n as f64) * k;
         let cosine = w.cos();
         let sine = w.sin();
         let coeff = 2.0 * cosine;
-        Goertz {
-            f: target,
+        Goertz16 {
             n,
             cosine,
             sine,
@@ -37,7 +35,7 @@ impl Goertz {
         (q1, q2)
     }
 
-    pub fn vector(&self, samples: &[f32]) -> (f64, f64) {
+    pub fn components(&self, samples: &[f32]) -> (f64, f64) {
         let (q1, q2) = self.qs(samples);
         let real = q1 - q2 * self.cosine;
         let imag = q2 * self.sine;
@@ -51,7 +49,7 @@ impl Goertz {
     }
 
     pub fn magnitude(&self, samples: &[f32]) -> f64 {
-        self.magnitude.sqrt()
+        self.magnitude_squared(samples).sqrt()
     }
 }
 
@@ -63,17 +61,19 @@ const NOTES: usize = (OCTAVE_BASE * 9) as usize;
 
 struct Glt {
     samples: [f32; BASE_N],
-    goertzes: [Goertz; NOTES],
+    goertzes: [(f64, Goertz16); NOTES],
 }
 
 impl Glt {
     pub fn new() -> Glt {
-        let mut goertzes: [Goertz; NOTES] = unsafe { std::mem::uninitialized() };
+        let mut goertzes: [(f64, Goertz16); NOTES] = unsafe {
+            std::mem::uninitialized()
+        };
         for g in 0..NOTES {
             let k = 2_f64.powf(g as f64 / 16.0);
             let n = (BASE_N as f64 / k) as usize;
             let target = k * BASE_F;
-            goertzes[g] = Goertz::new(n, target, RATE);
+            goertzes[g] = (target, Goertz16::new(n));
         }
         Glt {
             samples: [0.0; BASE_N],
@@ -83,9 +83,9 @@ impl Glt {
 
     pub fn process(&self) -> [(f64, f64); NOTES] {
         let mut mags: [(f64, f64); NOTES] = unsafe { std::mem::uninitialized() };
-        for (i, goertz) in self.goertzes.iter().enumerate() {
+        for (i, (f, goertz)) in self.goertzes.iter().enumerate() {
             let mag = goertz.magnitude(&self.samples[0..goertz.n]);
-            mags[i] = (goertz.f, mag);
+            mags[i] = (*f, mag);
         }
         mags
     }
