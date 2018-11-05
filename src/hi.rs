@@ -1,3 +1,5 @@
+use std::mem;
+
 // https://www.embedded.com/design/configurable-systems/4024443/The-Goertzel-Algorithm
 
 struct Goertz16 {
@@ -68,7 +70,7 @@ const BASE_F: f64 = RATE as f64 / BASE_N as f64 * 23.0;
 const OCTAVE_BASE: u32 = 16;
 const NOTES: usize = (OCTAVE_BASE * 9) as usize;
 
-struct Glt {
+pub struct Glt {
     samples: [f32; BASE_N],
     filters: [(f64, Box<[f64]>, Goertz16); NOTES],
 }
@@ -76,7 +78,7 @@ struct Glt {
 impl Glt {
     pub fn new() -> Glt {
         let mut filters: [(f64, Box<[f64]>, Goertz16); NOTES] = unsafe {
-            std::mem::uninitialized()
+            mem::uninitialized()
         };
         for g in 0..NOTES {
             let k = 2_f64.powf(g as f64 / 16.0);
@@ -92,7 +94,7 @@ impl Glt {
     }
 
     pub fn process(&self, min_samples: usize) -> [(f64, f64); NOTES] {
-        let mut mags: [(f64, f64); NOTES] = unsafe { std::mem::uninitialized() };
+        let mut mags: [(f64, f64); NOTES] = unsafe { mem::uninitialized() };
         for (i, (f, window, goertz)) in self.filters.iter().enumerate() {
             let mut accumulated_magnitude = 0.0;
             let mut runs = 0;

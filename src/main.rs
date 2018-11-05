@@ -3,6 +3,8 @@ extern crate jack;
 extern crate lossyq;
 extern crate sdl2;
 
+mod hi;
+
 use jack::prelude as j;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -10,7 +12,7 @@ use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use std::collections::VecDeque;
 use std::{env, thread, time};
-// use std::io;
+use hi::Glt;
 
 // const LOWEST_NOTE_FREQ: f32 = 27.5;  // A0
 const HIGHEST_SAMPLE_RATE: u32 = 96000;  // I guess?
