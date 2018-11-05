@@ -9,8 +9,9 @@ struct Goertz16 {
 
 impl Goertz16 {
     pub fn new(n: usize) -> Goertz16 {
+        use std::f64::consts::PI;
         let k = 23.0;  // we always want the 23rd bin
-        let w = 2.0 * std::f64::consts::PI / (n as f64) * k;
+        let w = 2.0 * PI / (n as f64) * k;
         let cosine = w.cos();
         let sine = w.sin();
         let coeff = 2.0 * cosine;
@@ -53,6 +54,14 @@ impl Goertz16 {
     }
 }
 
+pub fn hann(n: usize) -> Box<[f64]> {
+    use std::f64::consts::PI;
+    let window: Vec<_> = (0..n)
+        .map(|i| (PI * i as f64 / n as f64).sin().powi(2))
+        .collect();
+    window.into_boxed_slice()
+}
+
 const RATE: u32 = 44100;
 const BASE_N: usize = 36221;
 const BASE_F: f64 = RATE as f64 / BASE_N as f64 * 23.0;
@@ -61,31 +70,44 @@ const NOTES: usize = (OCTAVE_BASE * 9) as usize;
 
 struct Glt {
     samples: [f32; BASE_N],
-    goertzes: [(f64, Goertz16); NOTES],
+    filters: [(f64, Box<[f64]>, Goertz16); NOTES],
 }
 
 impl Glt {
     pub fn new() -> Glt {
-        let mut goertzes: [(f64, Goertz16); NOTES] = unsafe {
+        let mut filters: [(f64, Box<[f64]>, Goertz16); NOTES] = unsafe {
             std::mem::uninitialized()
         };
         for g in 0..NOTES {
             let k = 2_f64.powf(g as f64 / 16.0);
             let n = (BASE_N as f64 / k) as usize;
             let target = k * BASE_F;
-            goertzes[g] = (target, Goertz16::new(n));
+            let window = hann(n);
+            filters[g] = (target, window, Goertz16::new(n));
         }
         Glt {
             samples: [0.0; BASE_N],
-            goertzes,
+            filters,
         }
     }
 
-    pub fn process(&self) -> [(f64, f64); NOTES] {
+    pub fn process(&self, min_samples: usize) -> [(f64, f64); NOTES] {
         let mut mags: [(f64, f64); NOTES] = unsafe { std::mem::uninitialized() };
-        for (i, (f, goertz)) in self.goertzes.iter().enumerate() {
-            let mag = goertz.magnitude(&self.samples[0..goertz.n]);
-            mags[i] = (*f, mag);
+        for (i, (f, window, goertz)) in self.filters.iter().enumerate() {
+            let mut accumulated_magnitude = 0.0;
+            let mut runs = 0;
+            for i in 0..(min_samples / (goertz.n / 2)) {
+                let samples: Vec<f32> = window
+                    .iter()
+                    .zip(self.samples[(i * goertz.n / 2)..].iter())
+                    .map(|(a, s)| (a * *s as f64) as f32)
+                    .collect();
+                let mag = goertz.magnitude(&*samples);
+                accumulated_magnitude += mag;
+                runs += 1;
+            }
+            let magnitude = accumulated_magnitude / runs as f64;
+            mags[i] = (*f, magnitude);
         }
         mags
     }
