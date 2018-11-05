@@ -1,0 +1,66 @@
+sample_rate = 44100
+
+N_ROOT_2 = 16
+
+
+bottom_freq target: 27.5
+    -> target bottom_bin_size
+        = 27.5 * (2**(1/16.0) - 1)
+        = 1.2175290167538781
+    -> N for bottom_bin_size
+        = sample_rate / target_bottom_bin_size
+        = 36220.902658712366
+    -> closest real N
+        = 36221
+    -> actual bin size
+        = sample_rate / 36221
+        = 1.217525744733718
+    -> target bottom bin
+        = 27.5 / actual bin size
+        = 27.5 / 1.217525744733718
+        = 22.586791383219953
+    -> closest actual bottom bin
+        = 23
+    -> actual bottom bin freq
+        = actual bin size * closest actual bottom bin
+        = (sample_rate / 36221.0) * 23
+        = 28.003092128875515
+    -> bin size error
+        = ((actual freq + bin) / actual freq) - 2**(1/16.0)
+        = -0.0007955215578485664
+        = -0.08%
+        = pretty good?
+
+top_freq target
+        = actual bottom bin freq * 2**9  // 9 octaves
+        = 14337.583169984264
+    -> target_top_bin_size
+        = top_freq target * (2**(1/16.0) - 1)
+        = 634.7790378028325
+    -> N for top bin size
+        = sample_rate / target_top_bin_size
+        = 69.47299355165194
+    -> closest real N
+        = 70  // rounding up made it bin 23 we care about, matching with bottom
+    -> actual bin size
+        = sample_rate / 70
+        = 630.0
+    -> target top bin
+        = top_freq_target / actual bin size
+        = 14337.583169984264 / 630
+        = 22.758068523784544
+    -> closest actual top bin
+        = 23
+    -> actual top bin freq
+        = actual_bin_size * closest actual_top_bin
+        = 630.0 * 23
+        = 14490.0
+    -> bin size error
+        = ((actual freq + bin) / actual_freq) - 2**(1/16.0)
+        = -0.0007955215578485664
+        = -0.08% hiya
+
+
+bottom N = 36221
+top    N = 70
+
