@@ -97,9 +97,14 @@ impl Glt {
             let mut accumulated_magnitude = 0.0;
             let mut runs = 0;
             for i in 0..(min_samples / (goertz.n / 2)) {
+                let start = i * goertz.n / 2;
+                let end = start + goertz.n;
+                if end > BASE_N {
+                    continue
+                }
                 let samples: Vec<f32> = window
                     .iter()
-                    .zip(self.samples[(i * goertz.n / 2)..].iter())
+                    .zip(self.samples[start..end].iter())
                     .map(|(a, s)| (a * *s as f64) as f32)
                     .collect();
                 let mag = goertz.magnitude(&*samples);
