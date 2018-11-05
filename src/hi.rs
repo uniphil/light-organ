@@ -102,10 +102,10 @@ impl Glt {
                 if end > BASE_N {
                     continue
                 }
-                let samples: Vec<f32> = window
+                let samples: Vec<f32> = self.samples[start..end]
                     .iter()
-                    .zip(self.samples[start..end].iter())
-                    .map(|(a, s)| (a * *s as f64) as f32)
+                    .zip(window.iter())
+                    .map(|(s, a)| (*s as f64 * a) as f32)
                     .collect();
                 let mag = goertz.magnitude(&*samples);
                 accumulated_magnitude += mag;
