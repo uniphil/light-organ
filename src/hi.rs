@@ -98,35 +98,26 @@ impl Glt {
     pub fn process(&self, samples: &[f32], min_samples: usize) -> [(f64, f64); NOTES] {
         let mut mags: [(f64, f64); NOTES] = unsafe { mem::uninitialized() };
         for (i, (f, window, goertz)) in self.filters.iter().enumerate() {
-            // let mut accumulated_magnitude = 0.0;
-            let mut mag = 0.0;
-            // let mut runs = 0;
-            // let i = 1;
-            // {
-            //     let start = 0;
-            //     let end = start + goertz.n;
-            //     if end > BASE_N {
-            //         println!("wat {:?}", end);
-            //         continue
-            //     }
-            //     // let samples = 
-                let windowed: Vec<f32> = samples[0..goertz.n]
+            let mut accumulated_magnitude = 0.0;
+            let mut runs = 0;
+            for run in 0..=(min_samples / goertz.n * 2) {
+                let start = run * goertz.n / 2;
+                let end = start + goertz.n;
+                if end > BASE_N {
+                    println!("wat {:?}", end);
+                    continue
+                }
+                let windowed: Vec<f32> = samples[start..end]
                     .iter()
                     .zip(window.iter())
                     .map(|(s, _a)| *s)  // (*s as f64 * a) as f32)
                     .collect();
-            //     // println!("{:?}", samples);
-            //     // mag = goertz.magnitude(&samples[start..end]);
-            //     // accumulated_magnitude += mag;
-            //     // runs += 1;
-            // }
-            let mag = goertz.magnitude(&*windowed);
-            // println!("SAMPLES {:?}, MAG {:?}", &samples[0..goertz.n][10], mag);
-            // if (mag > 0.0001) {
-            //     println!("heya!");
-            // }
-            // let magnitude = accumulated_magnitude / runs as f64;
-            mags[i] = (*f, mag);
+                let mag = goertz.magnitude(&samples[start..end]);
+                accumulated_magnitude += mag;
+                runs += 1;
+            }
+            let magnitude = accumulated_magnitude / runs as f64;
+            mags[i] = (*f, magnitude);
         }
         mags
     }
