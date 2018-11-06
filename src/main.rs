@@ -33,6 +33,13 @@ impl RGB {
     fn new(r: f64, g: f64, b: f64) -> Self {
         RGB { r, g, b }
     }
+    fn scale(&self, x: f64) -> RGB {
+        RGB {
+            r: self.r * x,
+            g: self.g * x,
+            b: self.b * x,
+        }
+    }
 }
 
 impl From<RGB> for Color {
@@ -217,7 +224,7 @@ impl Computer {
         }
     }
 
-    fn update(&mut self) {
+    fn process(&mut self) -> [(f64, f64); 144] {
         let mut min_samples = 0;
         for sample in self.rx.iter() {
             self.samples_window.push_back(sample);
@@ -228,18 +235,11 @@ impl Computer {
         }
         // bleh
         let contig_samples: Vec<f32> = self.samples_window.iter().map(|s| *s).collect();
-        let mags: [(f64, f64); 144] = self.glt.process(&*contig_samples, min_samples);
-        // let freq_samples = self.samples_window
-        //     .iter()
-        //     .rev()
-        //     .take(BUFFSIZE)
-        //     .map(|s| *s)
-        //     .collect::<Vec<_>>();
-        // let freq_mags = (1..100)
-        //     .map(|n| 440. * 2.0_f32.powf(1./12.).powf(n as f32 - 48.))
-        //     .filter(|f| *f > 44100. / BUFFSIZE as f32)
-        //     .map(|f| goertzel::Parameters::new(f, 44100, BUFFSIZE as usize)
-        //             .mag(&freq_samples));
+        self.glt.process(&*contig_samples, min_samples)
+    }
+
+    fn update_colour(&mut self) {
+        let mags = self.process();
 
         let mut rgb = RGB { r: 0., g: 0., b: 0. };
         for (i, (_f, mag)) in mags.iter().enumerate() {
@@ -305,26 +305,38 @@ fn main() {
 
     'main: loop {
         let t0 = time::Instant::now();
-        for computer in &mut computers {
-            computer.update();
-        }
+        let mags = computers[0].process();
+        // for computer in &mut computers {
+        //     computer.update_colour();
+        // }
         println!("dt {:?}", t0.elapsed());
-        let colours = computers
-            .iter()
-            .map(Computer::get_colour)
-            .map(Color::from);
+        // let colours = computers
+        //     .iter()
+        //     .map(Computer::get_colour)
+        //     .map(Color::from);
 
         canvas.set_draw_color(Color::RGB(0, 0, 0));
         canvas.clear();
 
         let (w, h) = canvas.window().size();
-        let rects = computers.len() as u32;
-        let rect_width = w / rects;
+        // let rects = computers.len() as u32;
+        let rects = 144;
+        let rect_width = w as f64 / rects as f64;
 
-        for (i, colour) in colours.enumerate() {
-            canvas.set_draw_color(colour);
+        // for (i, colour) in colours.enumerate() {
+        //     canvas.set_draw_color(colour);
+        //     canvas
+        //         .fill_rect(Rect::new(i as i32 * rect_width as i32, 0, rect_width, h))
+        //         .unwrap();
+        // }
+        for (i, (_f, mag)) in mags.iter().enumerate() {
+            let height = (mag.max(0.0) * 10.0) as u32;
+            canvas.set_draw_color(Color::from(NOTE_COLOURS[i % 16].scale(255.0)));
             canvas
-                .fill_rect(Rect::new(i as i32 * rect_width as i32, 0, rect_width, h))
+                .fill_rect(Rect::new((i as f64 * rect_width as f64) as i32,
+                                     h as i32 - height as i32,
+                                     rect_width as u32 - 2,
+                                     height))
                 .unwrap();
         }
         canvas.present();
@@ -340,7 +352,7 @@ fn main() {
         }
         let elapsed = t0.elapsed();
         let target_time = time::Duration::new(0, 1_000_000_000 / 60);
-        if (elapsed < target_time) {
+        if elapsed < target_time {
             thread::sleep(target_time - elapsed);
         }
     }
