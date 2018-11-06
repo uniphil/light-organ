@@ -110,17 +110,17 @@ impl Glt {
             //         continue
             //     }
             //     // let samples = 
-            //     // let samples: Vec<f32> = samples[start..end]
-            //     //     .iter()
-            //     //     .zip(window.iter())
-            //     //     .map(|(s, _a)| *s)  // (*s as f64 * a) as f32)
-            //     //     .collect();
+                let windowed: Vec<f32> = samples[0..goertz.n]
+                    .iter()
+                    .zip(window.iter())
+                    .map(|(s, _a)| *s)  // (*s as f64 * a) as f32)
+                    .collect();
             //     // println!("{:?}", samples);
             //     // mag = goertz.magnitude(&samples[start..end]);
             //     // accumulated_magnitude += mag;
             //     // runs += 1;
             // }
-            let mag = goertz.magnitude(&samples[0..goertz.n]);
+            let mag = goertz.magnitude(&*windowed);
             // println!("SAMPLES {:?}, MAG {:?}", &samples[0..goertz.n][10], mag);
             // if (mag > 0.0001) {
             //     println!("heya!");

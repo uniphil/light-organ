@@ -234,8 +234,12 @@ impl Computer {
             min_samples += 1;
         }
         // bleh
-        let contig_samples: Vec<f32> = self.samples_window.iter().map(|s| *s).collect();
-        self.glt.process(&*contig_samples, min_samples)
+        let mut config_samples: Vec<f32> = self.samples_window
+            .iter()
+            .map(|s| *s)
+            .collect();
+        config_samples.reverse();
+        self.glt.process(&*config_samples, min_samples)
     }
 
     fn update_colour(&mut self) {
@@ -339,6 +343,7 @@ fn main() {
                                      height))
                 .unwrap();
         }
+
         canvas.present();
 
         for event in events.poll_iter() {
