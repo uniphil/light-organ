@@ -1,7 +1,9 @@
 use std::mem;
+use std::ptr;
 
 // https://www.embedded.com/design/configurable-systems/4024443/The-Goertzel-Algorithm
 
+#[derive(Debug)]
 struct Goertz16 {
     pub n: usize,
     cosine: f64,
@@ -79,12 +81,14 @@ impl Glt {
         let mut filters: [(f64, Box<[f64]>, Goertz16); NOTES] = unsafe {
             mem::uninitialized()
         };
-        for g in 0..NOTES {
+        for (g, filter) in filters.iter_mut().enumerate() {
             let k = 2_f64.powf(g as f64 / 16.0);
             let n = (BASE_N as f64 / k) as usize;
             let target = k * BASE_F;
             let window = hann(n);
-            filters[g] = (target, window, Goertz16::new(n));
+            unsafe {
+                ptr::write(filter, (target, window, Goertz16::new(n)));
+            }
         }
         Glt {
             filters,

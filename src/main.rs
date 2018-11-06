@@ -304,9 +304,11 @@ fn main() {
     let (mut canvas, mut events) = get_window_canvas();
 
     'main: loop {
+        let t0 = time::Instant::now();
         for computer in &mut computers {
             computer.update();
         }
+        println!("dt {:?}", t0.elapsed());
         let colours = computers
             .iter()
             .map(Computer::get_colour)
@@ -336,7 +338,11 @@ fn main() {
                 _ => {},
             }
         }
-        thread::sleep(time::Duration::new(0, 1_000_000_000 / 60));
+        let elapsed = t0.elapsed();
+        let target_time = time::Duration::new(0, 1_000_000_000 / 60);
+        if (elapsed < target_time) {
+            thread::sleep(target_time - elapsed);
+        }
     }
     println!("bye");
 
