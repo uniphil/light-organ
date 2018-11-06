@@ -309,40 +309,40 @@ fn main() {
 
     'main: loop {
         let t0 = time::Instant::now();
-        let mags = computers[0].process();
-        // for computer in &mut computers {
-        //     computer.update_colour();
-        // }
+        // let mags = computers[0].process();
+        for computer in &mut computers {
+            computer.update_colour();
+        }
         println!("dt {:?}", t0.elapsed());
-        // let colours = computers
-        //     .iter()
-        //     .map(Computer::get_colour)
-        //     .map(Color::from);
+        let colours = computers
+            .iter()
+            .map(Computer::get_colour)
+            .map(Color::from);
 
         canvas.set_draw_color(Color::RGB(0, 0, 0));
         canvas.clear();
 
         let (w, h) = canvas.window().size();
-        // let rects = computers.len() as u32;
-        let rects = 144;
+        let rects = computers.len() as u32;
+        // let rects = 144;
         let rect_width = w as f64 / rects as f64;
 
-        // for (i, colour) in colours.enumerate() {
-        //     canvas.set_draw_color(colour);
-        //     canvas
-        //         .fill_rect(Rect::new(i as i32 * rect_width as i32, 0, rect_width, h))
-        //         .unwrap();
-        // }
-        for (i, (_f, mag)) in mags.iter().enumerate() {
-            let height = (mag.max(0.0) * 10.0) as u32;
-            canvas.set_draw_color(Color::from(NOTE_COLOURS[i % 16].scale(255.0)));
+        for (i, colour) in colours.enumerate() {
+            canvas.set_draw_color(colour);
             canvas
-                .fill_rect(Rect::new((i as f64 * rect_width as f64) as i32,
-                                     h as i32 - height as i32,
-                                     rect_width as u32 - 2,
-                                     height))
+                .fill_rect(Rect::new(i as i32 * rect_width as i32, 0, rect_width as u32, h))
                 .unwrap();
         }
+        // for (i, (_f, mag)) in mags.iter().enumerate() {
+        //     let height = (mag.max(0.0) * 10.0) as u32;
+        //     canvas.set_draw_color(Color::from(NOTE_COLOURS[i % 16].scale(255.0)));
+        //     canvas
+        //         .fill_rect(Rect::new((i as f64 * rect_width as f64) as i32,
+        //                              h as i32 - height as i32,
+        //                              rect_width as u32 - 2,
+        //                              height))
+        //         .unwrap();
+        // }
 
         canvas.present();
 
