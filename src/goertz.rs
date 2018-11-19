@@ -110,7 +110,7 @@ impl Glt {
                 let windowed: Vec<f32> = samples[start..end]
                     .iter()
                     .zip(window.iter())
-                    .map(|(s, _a)| *s)  // (*s as f64 * a) as f32)
+                    .map(|(s, a)| (*s as f64 * a) as f32)
                     .collect();
                 let mag = goertz.magnitude(&samples[start..end]);
                 accumulated_magnitude += mag;
