@@ -20,7 +20,7 @@ const WINDOW_SIZE: usize = HIGHEST_SAMPLE_RATE as usize;
 
 const BUFFSIZE: usize = 1024;
 
-const DECAY_SAMPLES: usize = 32;
+const DECAY_SAMPLES: usize = 16;
 
 #[derive(Debug)]
 struct RGB {
@@ -163,17 +163,22 @@ impl Computer {
         self.glt.process(&*config_samples, min_samples)
     }
 
-    fn update_colour(&mut self) {
+    fn update_colour(&mut self) -> [(f64, f64); 144] {
         let mags = self.process();
 
         let mut rgb = RGB { r: 0., g: 0., b: 0. };
         for (i, (_f, mag)) in mags.iter().enumerate() {
-            rgb.r += mag * NOTE_COLOURS[i % 12].r;
-            rgb.g += mag * NOTE_COLOURS[i % 12].g;
-            rgb.b += mag * NOTE_COLOURS[i % 12].b;
+            rgb.r += mag * NOTE_COLOURS[i % 16].r;
+            rgb.g += mag * NOTE_COLOURS[i % 16].g;
+            rgb.b += mag * NOTE_COLOURS[i % 16].b;
+        }
+        let highest = 0.0_f64.max(rgb.r).max(rgb.g).max(rgb.b);
+        if highest > 255.0 {
+            rgb.scale(255.0 / highest);
         }
         self.decay_window.pop_back();
         self.decay_window.push_front(rgb);
+        mags
     }
 
     fn get_colour(&self) -> RGB {
@@ -230,11 +235,11 @@ fn main() {
 
     'main: loop {
         let t0 = time::Instant::now();
-        // let mags = computers[0].process();
-        for computer in &mut computers {
-            computer.update_colour();
-        }
-        println!("dt {:?}", t0.elapsed());
+        let mut mags;
+        // for computer in &mut computers {
+            mags = computers[0].update_colour();
+        // }
+        // println!("dt {:?}", t0.elapsed());
         let colours = computers
             .iter()
             .map(Computer::get_colour)
@@ -245,25 +250,26 @@ fn main() {
 
         let (w, h) = canvas.window().size();
         let rects = computers.len() as u32;
-        // let rects = 144;
         let rect_width = w as f64 / rects as f64;
 
         for (i, colour) in colours.enumerate() {
             canvas.set_draw_color(colour);
             canvas
-                .fill_rect(Rect::new(i as i32 * rect_width as i32, 0, rect_width as u32, h))
+                .fill_rect(Rect::new(i as i32 * rect_width as i32, 0, rect_width as u32, h - 200))
                 .unwrap();
         }
-        // for (i, (_f, mag)) in mags.iter().enumerate() {
-        //     let height = (mag.max(0.0) * 10.0) as u32;
-        //     canvas.set_draw_color(Color::from(NOTE_COLOURS[i % 16].scale(255.0)));
-        //     canvas
-        //         .fill_rect(Rect::new((i as f64 * rect_width as f64) as i32,
-        //                              h as i32 - height as i32,
-        //                              rect_width as u32 - 2,
-        //                              height))
-        //         .unwrap();
-        // }
+        let bars = 144;
+        for (i, (_f, mag)) in mags.iter().enumerate() {
+            let bar_width = w as f64 / bars as f64;
+            let height = (mag.max(0.0) * 5.0) as u32;
+            canvas.set_draw_color(Color::from(NOTE_COLOURS[i % 16].scale(255.0)));
+            canvas
+                .fill_rect(Rect::new((i as f64 * bar_width as f64) as i32,
+                                     h as i32 - height as i32,
+                                     bar_width as u32 - 2,
+                                     height))
+                .unwrap();
+        }
 
         canvas.present();
 
