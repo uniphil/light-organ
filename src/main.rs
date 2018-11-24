@@ -235,11 +235,10 @@ fn main() {
 
     'main: loop {
         let t0 = time::Instant::now();
-        let mut mags;
-        // for computer in &mut computers {
-            mags = computers[0].update_colour();
-        // }
-        // println!("dt {:?}", t0.elapsed());
+        for computer in &mut computers {
+            computer.update_colour();
+        }
+        println!("dt {:?}", t0.elapsed());
         let colours = computers
             .iter()
             .map(Computer::get_colour)
@@ -255,19 +254,7 @@ fn main() {
         for (i, colour) in colours.enumerate() {
             canvas.set_draw_color(colour);
             canvas
-                .fill_rect(Rect::new(i as i32 * rect_width as i32, 0, rect_width as u32, h - 200))
-                .unwrap();
-        }
-        let bars = 144;
-        for (i, (_f, mag)) in mags.iter().enumerate() {
-            let bar_width = w as f64 / bars as f64;
-            let height = (mag.max(0.0) * 5.0) as u32;
-            canvas.set_draw_color(Color::from(NOTE_COLOURS[i % 16].scale(255.0)));
-            canvas
-                .fill_rect(Rect::new((i as f64 * bar_width as f64) as i32,
-                                     h as i32 - height as i32,
-                                     bar_width as u32 - 2,
-                                     height))
+                .fill_rect(Rect::new(i as i32 * rect_width as i32, 0, rect_width as u32, h))
                 .unwrap();
         }
 
