@@ -238,7 +238,7 @@ fn main() {
         for computer in &mut computers {
             computer.update_colour();
         }
-        println!("dt {:?}", t0.elapsed());
+        // println!("dt {:?}", t0.elapsed());
         let colours = computers
             .iter()
             .map(Computer::get_colour)
