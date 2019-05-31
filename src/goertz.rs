@@ -4,7 +4,6 @@ use std::ptr;
 // https://www.embedded.com/design/configurable-systems/4024443/The-Goertzel-Algorithm
 
 // https://plot.ly/~mrlyule/16/equal-loudness-contours-iso-226-2003/#data
-
 const ATTENUATION_FREQS: [f64; 31] = [
     20.0,
     25.0,
@@ -73,22 +72,21 @@ const ATTENUATIONS: [f64; 31] = [
 ];
 
 #[derive(Debug)]
-struct Goertz16 {
+struct Goertz {
     pub n: usize,
     cosine: f64,
     sine: f64,
     coeff: f64,
 }
 
-impl Goertz16 {
-    pub fn new(n: usize) -> Goertz16 {
+impl Goertz {
+    pub fn new(n: usize, bin: usize) -> Goertz {
         use std::f64::consts::PI;
-        let k = 23.0;  // we always want the 23rd bin
-        let w = 2.0 * PI / (n as f64) * k;
+        let w = 2.0 * PI / (n as f64) * bin as f64;
         let cosine = w.cos();
         let sine = w.sin();
         let coeff = 2.0 * cosine;
-        Goertz16 {
+        Goertz {
             n,
             cosine,
             sine,
@@ -126,7 +124,6 @@ impl Goertz16 {
         self.magnitude_squared(samples).sqrt()
     }
 }
-
 pub fn hann(n: usize) -> Box<[f64]> {
     use std::f64::consts::PI;
     let window: Vec<_> = (0..n)
@@ -143,12 +140,12 @@ const NOTES: usize = (OCTAVE_BASE * 9) as usize;
 
 pub struct Glt {
     //         f    att  window      g
-    filters: [(f64, f64, Box<[f64]>, Goertz16); NOTES],
+    filters: [(f64, f64, Box<[f64]>, Goertz); NOTES],
 }
 
 impl Glt {
     pub fn new() -> Glt {
-        let mut filters: [(f64, f64, Box<[f64]>, Goertz16); NOTES] = unsafe {
+        let mut filters: [(f64, f64, Box<[f64]>, Goertz); NOTES] = unsafe {
             mem::uninitialized()
         };
         for (g, filter) in filters.iter_mut().enumerate() {
@@ -171,7 +168,7 @@ impl Glt {
             };
             let window = hann(n);
             unsafe {
-                ptr::write(filter, (target, att, window, Goertz16::new(n)));
+                ptr::write(filter, (target, att, window, Goertz::new(n, 23)));
             }
         }
         Glt {
@@ -181,18 +178,18 @@ impl Glt {
 
     pub fn process(&self, samples: &[f32], min_samples: usize) -> [(f64, f64); NOTES] {
         let mut mags: [(f64, f64); NOTES] = unsafe { mem::uninitialized() };
-        for (i, (f, att, window, goertz)) in self.filters.iter().enumerate() {
+        for (i, (f, att, _window, goertz)) in self.filters.iter().enumerate() {
             let mut accumulated_magnitude = 0.0;
             let mut runs = 0;
             for run in 0..=(min_samples / goertz.n * 2) {
                 let start = run * goertz.n / 2;
                 let end = start + goertz.n;
                 assert!(end <= BASE_N);
-                let windowed: Vec<f32> = samples[start..end]
-                    .iter()
-                    .zip(window.iter())
-                    .map(|(s, a)| (*s as f64 * a) as f32)
-                    .collect();
+                // let windowed: Vec<f32> = samples[start..end]
+                //     .iter()
+                //     .zip(window.iter())
+                //     .map(|(s, a)| (*s as f64 * a) as f32)
+                //     .collect();
                 let mag = goertz.magnitude(&samples[start..end]);
                 accumulated_magnitude += mag;
                 runs += 1;
