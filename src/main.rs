@@ -202,12 +202,12 @@ impl Computer {
 fn main() {
     let channels = env::args()
         .nth(1)
-        .unwrap()
+        .unwrap_or(2.to_string())
         .parse::<u8>()
         .unwrap();
 
     let (client, _status) = j::Client::new("colours", j::client_options::NO_START_SERVER)
-        .unwrap();
+        .expect("\n\nHEY! you might need to `jackdmp -d coreaudio` in another terminal :)\n\n");
 
     let mut receivers: Vec<JackReceiver> = Vec::new();
     let mut computers: Vec<Computer> = Vec::new();
@@ -230,6 +230,15 @@ fn main() {
     };
     let process = j::ClosureProcessHandler::new(process_callback);
     let active_client = j::AsyncClient::new(client, (), process).unwrap();
+
+    for i in 0..channels {
+        let source = &format!("system:capture_{}", i+1);
+        let destination = &format!("colours:in_{}", i+1);
+        match active_client.connect_ports_by_name(source, destination) {
+            Ok(_) => println!("{} → {} ✓", source, destination),
+            Err(e) => println!("{} → {} ✗\n{:?}", source, destination, e),
+        }
+    }
 
     let (mut canvas, mut events) = get_window_canvas();
 
