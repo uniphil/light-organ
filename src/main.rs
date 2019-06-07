@@ -20,9 +20,10 @@ const WINDOW_SIZE: usize = HIGHEST_SAMPLE_RATE as usize;
 
 const BUFFSIZE: usize = 1024;
 
-const DECAY_SAMPLES: usize = 16;
+const AMP_SAMPLES: usize = 16;
+const COLOUR_SAMPLES: usize = 3;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct RGB {
     r: f64,
     g: f64,
@@ -48,6 +49,29 @@ impl From<RGB> for Color {
         Color::RGB(f(rgb.r), f(rgb.g), f(rgb.b))
     }
 }
+
+
+  // modified munsell // original munsell hex
+  // [59, 100, 47],  // 0 #f0ea00
+  // [70, 100, 42],  // 1 #b1d700
+  // [115, 100, 40],  // 2 #00ca24
+  // [150, 100, 36],  // 3 #00a877
+  // [172, 100, 33],  // 4 #00a78a
+  // [188, 100, 35],  // 5 #00a59c
+  // [201, 100, 39],  // 6 #00a3ac
+  // [218, 100, 43],  // 7 #0093af
+  // [250, 100, 51],  // 8 #0082b2
+  // [260, 100, 49],  // 9 #006ebf
+  // [269, 100, 47],  // 10 #7d00f8
+  // [285, 100, 39],  // 11 #9f00c5
+  // [303, 100, 36],  // 12 #b900a6
+  // [321, 100, 41],  // 13 #d00081
+  // [332, 100, 44],  // 14 #e20064
+  // [345, 100, 47],  // 15 #f2003c
+  // [22, 100, 49],  // 16 #f85900
+  // [34, 100, 47],  // 17 #f28800
+  // [42, 100, 47],  // 18 #f2ab00
+  // [51, 100, 47],  // 19 #efcc00
 
 
 // 16
@@ -122,25 +146,32 @@ impl JackReceiver {
 struct Computer {
     rx: lossyq::spsc::Receiver<f32>,
     glt: Glt,
-    decay_window: VecDeque<RGB>,
-    samples_window: VecDeque<f32>,
+    amp_window: VecDeque<f64>,
+    colour_window: VecDeque<RGB>,
+    samples_window: VecDeque<f32>,  // amplitudes
 }
 
 impl Computer {
     fn new(rx: lossyq::spsc::Receiver<f32>) -> Self {
+        let mut amp_window: VecDeque<f64> = VecDeque::with_capacity(AMP_SAMPLES);
+        let mut colour_window: VecDeque<RGB> = VecDeque::with_capacity(COLOUR_SAMPLES);
         let mut samples_window: VecDeque<f32> = VecDeque::with_capacity(WINDOW_SIZE);
-        let mut decay_window: VecDeque<RGB> = VecDeque::with_capacity(DECAY_SAMPLES);
-        for _ in 0..DECAY_SAMPLES {
-            decay_window.push_back(RGB::new(0., 0., 0.));
+        for _ in 0..AMP_SAMPLES {
+            amp_window.push_back(0.0);
+        }
+        for _ in 0..COLOUR_SAMPLES {
+            colour_window.push_back(RGB::new(0.0, 0.0, 0.0));
         }
         for _ in 0..WINDOW_SIZE {
             samples_window.push_back(0.0);
         }
         let glt = Glt::new();
+        let colour = RGB::new(0.0, 0.0, 0.0);
         Computer {
             rx,
             glt,
-            decay_window,
+            amp_window,
+            colour_window,
             samples_window,
         }
     }
@@ -166,36 +197,41 @@ impl Computer {
     fn update_colour(&mut self) -> [(f64, f64); 144] {
         let mags = self.process();
 
+        let mut amplitude = 0.0;
+
         let mut rgb = RGB { r: 0., g: 0., b: 0. };
         for (i, (_f, mag)) in mags.iter().enumerate() {
             rgb.r += mag * NOTE_COLOURS[i % 16].r;
             rgb.g += mag * NOTE_COLOURS[i % 16].g;
             rgb.b += mag * NOTE_COLOURS[i % 16].b;
+            amplitude += mag;
         }
         let highest = 0.0_f64.max(rgb.r).max(rgb.g).max(rgb.b);
         if highest > 255.0 {
             rgb.scale(255.0 / highest);
         }
-        self.decay_window.pop_back();
-        self.decay_window.push_front(rgb);
+        self.amp_window.pop_back();
+        self.amp_window.push_front(amplitude);
+        self.colour_window.pop_back();
+        self.colour_window.push_front(rgb);
         mags
     }
 
     fn get_colour(&self) -> RGB {
-        let mut decayed_rgb = RGB::new(0., 0., 0.);
+        let mut decayed_colour = RGB::new(0., 0., 0.);
         let mut total_weight = 1.;
-        for i in 0..DECAY_SAMPLES {
-            let weight = (1. - (i as f64 / DECAY_SAMPLES as f64)).powf(2.);
+        for i in 0..COLOUR_SAMPLES {
+            let weight = (1. - (i as f64 / COLOUR_SAMPLES as f64)).powf(2.);
             total_weight += weight;
-            let old_rgb = &self.decay_window[i];
-            decayed_rgb.r += old_rgb.r * weight;
-            decayed_rgb.g += old_rgb.g * weight;
-            decayed_rgb.b += old_rgb.b * weight;
+            let old_colour = &self.colour_window[i];
+            decayed_colour.r += old_colour.r * weight;
+            decayed_colour.g += old_colour.g * weight;
+            decayed_colour.b += old_colour.b * weight;
         }
-        decayed_rgb.r /= total_weight;
-        decayed_rgb.g /= total_weight;
-        decayed_rgb.b /= total_weight;
-        decayed_rgb
+        decayed_colour.r /= total_weight;
+        decayed_colour.g /= total_weight;
+        decayed_colour.b /= total_weight;
+        decayed_colour
     }
 }
 

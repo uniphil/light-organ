@@ -2,6 +2,8 @@
 first terminal:
 ```bash
 $ jackdmp -d coreaudio
+
+jackdmp -R -d coreaudio -p 64
 ```
 
 second terminal:
@@ -9,7 +11,7 @@ second terminal:
 $ cargo run 1
 ```
 
-third:
+third (if it doesn't auto-connect):
 ```bash
 $ jack_connect system:capture_1 colours:in_1
 ```
