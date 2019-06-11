@@ -10,9 +10,10 @@ use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
+use sdl2::image::{LoadTexture, INIT_PNG};
 use std::collections::VecDeque;
 use std::{env, thread, time};
-use goertz::Glt;
+use goertz::{Glt, NOTES};
 
 // const LOWEST_NOTE_FREQ: f32 = 27.5;  // A0
 const HIGHEST_SAMPLE_RATE: u32 = 96000;  // I guess?
@@ -95,12 +96,13 @@ const NOTE_COLOURS: [RGB; 16] = [
 ];
 
 
-fn get_window_canvas() -> (sdl2::render::Canvas<sdl2::video::Window>, sdl2::EventPump) {
+fn get_window_canvas() -> (sdl2::render::Canvas<sdl2::video::Window>, sdl2::render::TextureCreator<sdl2::video::WindowContext>, sdl2::EventPump) {
     let sdl_context = sdl2::init()
         .unwrap();
     let video_subsystem = sdl_context
         .video()
         .unwrap();
+    let _image_context = sdl2::image::init(INIT_PNG).unwrap();
     let window = video_subsystem.window("colours", 800, 600)
         .resizable()
         .position_centered()
@@ -111,11 +113,14 @@ fn get_window_canvas() -> (sdl2::render::Canvas<sdl2::video::Window>, sdl2::Even
         .present_vsync()
         .build()
         .unwrap();
+
+    let texture_creator = canvas.texture_creator();
+
     let events = sdl_context.event_pump().unwrap();
     canvas.set_draw_color(Color::RGB(0, 0, 0));
     canvas.clear();
     canvas.present();
-    (canvas, events)
+    (canvas, texture_creator, events)
 }
 
 fn get_channel(client: &j::Client, name: &str) -> (JackReceiver, Computer) {
@@ -166,7 +171,6 @@ impl Computer {
             samples_window.push_back(0.0);
         }
         let glt = Glt::new();
-        let colour = RGB::new(0.0, 0.0, 0.0);
         Computer {
             rx,
             glt,
@@ -176,7 +180,7 @@ impl Computer {
         }
     }
 
-    fn process(&mut self) -> [(f64, f64); 144] {
+    fn process(&mut self) -> [(f64, f64); NOTES] {
         let mut min_samples = 0;
         for sample in self.rx.iter() {
             self.samples_window.push_back(sample);
@@ -194,7 +198,7 @@ impl Computer {
         self.glt.process(&*config_samples, min_samples)
     }
 
-    fn update_colour(&mut self) -> [(f64, f64); 144] {
+    fn update_colour(&mut self) -> [(f64, f64); NOTES] {
         let mags = self.process();
 
         let mut amplitude = 0.0;
@@ -276,14 +280,30 @@ fn main() {
         }
     }
 
-    let (mut canvas, mut events) = get_window_canvas();
+    let (mut canvas, texture_creator, mut events) = get_window_canvas();
 
-    'main: loop {
-        let t0 = time::Instant::now();
+    let mut evan = texture_creator.load_texture("src/evan.png").unwrap();
+    evan.set_blend_mode(sdl2::render::BlendMode::Add);
+    let mut fantou = texture_creator.load_texture("src/fantou.png").unwrap();
+    fantou.set_blend_mode(sdl2::render::BlendMode::Add);
+    let mut olivia = texture_creator.load_texture("src/olivia.png").unwrap();
+    olivia.set_blend_mode(sdl2::render::BlendMode::Add);
+    let mut gabriela = texture_creator.load_texture("src/gabriela.png").unwrap();
+    gabriela.set_blend_mode(sdl2::render::BlendMode::Add);
+
+    let mut images: [sdl2::render::Texture; 4] = [evan, fantou, olivia, gabriela];
+    let mut program_t0: Option<time::Instant> = None;
+
+    let fade = |dt|
+        if dt < 10_000 { dt as f64 / 10_000. }
+        else { (-(dt as f64) + 50_000.) / 10_000. };
+
+    'main_loop: loop {
+        let frame_t0 = time::Instant::now();
         for computer in &mut computers {
             computer.update_colour();
         }
-        // println!("dt {:?}", t0.elapsed());
+        // println!("dt {:?}", frame_t0.elapsed());
         let colours = computers
             .iter()
             .map(Computer::get_colour)
@@ -303,18 +323,45 @@ fn main() {
                 .unwrap();
         }
 
+        if let Some(t) = program_t0 {
+            let dt = t.elapsed().as_secs() as u32 * 1000 + t.elapsed().subsec_millis();// - 120_000;
+            let ref mut texture;
+            let alpha;
+            if dt < 60_000 {
+                texture = &mut images[0];
+                alpha = fade(dt);
+            } else if dt < 120_000 {
+                texture = &mut images[1];
+                alpha = fade(dt - 60_000);
+            } else if dt < 180_000 {
+                texture = &mut images[2];
+                alpha = fade(dt - 120_000);
+            } else {
+                texture = &mut images[3];
+                alpha = fade(dt - 180_000);
+            }
+
+            texture.set_alpha_mod((alpha * 128.).min(128.).max(0.) as u8);
+
+            canvas.copy(&texture, None, None).unwrap();
+        }
+
         canvas.present();
 
         for event in events.poll_iter() {
             match event {
-                Event::Quit {..} => break 'main,
+                Event::Quit {..} |
                 Event::KeyDown {keycode: Some(Keycode::Escape), ..} => {
-                    break 'main
+                    break 'main_loop
+                },
+                Event::KeyDown {keycode: Some(Keycode::Space), ..} => {
+                    program_t0 = Some(time::Instant::now());
+                    println!("starting images");
                 },
                 _ => {},
             }
         }
-        let elapsed = t0.elapsed();
+        let elapsed = frame_t0.elapsed();
         let target_time = time::Duration::new(0, 1_000_000_000 / 60);
         if elapsed < target_time {
             thread::sleep(target_time - elapsed);

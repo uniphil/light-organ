@@ -136,7 +136,7 @@ const RATE: u32 = 44100;
 const BASE_N: usize = 36221;
 const BASE_F: f64 = RATE as f64 / BASE_N as f64 * 23.0;
 const OCTAVE_BASE: u32 = 16;
-const NOTES: usize = (OCTAVE_BASE * 9) as usize;
+pub const NOTES: usize = (OCTAVE_BASE * 9) as usize;
 
 pub struct Glt {
     //         f    att  window      g
@@ -149,7 +149,7 @@ impl Glt {
             mem::uninitialized()
         };
         for (g, filter) in filters.iter_mut().enumerate() {
-            let k = 2_f64.powf(g as f64 / 16.0);
+            let k = 2_f64.powf(g as f64 / OCTAVE_BASE as f64);
             let n = (BASE_N as f64 / k) as usize;
             let target = k * BASE_F;
             let att = {

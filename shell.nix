@@ -7,6 +7,7 @@ stdenv.mkDerivation {
         jack2Full
         libjack2
         SDL2
+        SDL2_image
     ];
     shellHook = ''
     '';

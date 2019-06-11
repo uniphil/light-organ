@@ -8,4 +8,4 @@ goertzel = { git = "https://github.com/uniphil/goertzel", branch = "f32-samples"
 jack = "0.5.6"
 lossyq = "0.1.19"
 rust-hsluv = "0.1.3"
-sdl2 = "0.31.0"
+sdl2 = { version = "0.31.0", features = ["image"] }
