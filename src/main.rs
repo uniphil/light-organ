@@ -3,17 +3,21 @@ extern crate jack;
 extern crate lossyq;
 extern crate sdl2;
 
+mod audio;
 mod goertz;
+mod view;
 
 use jack::prelude as j;
 use sdl2::event::Event;
+use sdl2::image::LoadTexture;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
-use sdl2::image::{LoadTexture, INIT_PNG};
 use std::collections::VecDeque;
 use std::{env, thread, time};
-use goertz::{Glt, NOTES};
+use audio::{JackReceiver, get_channel};
+use goertz::{NOTES, Glt};
+use view::{RGB, get_window_canvas};
 
 // const LOWEST_NOTE_FREQ: f32 = 27.5;  // A0
 const HIGHEST_SAMPLE_RATE: u32 = 96000;  // I guess?
@@ -23,34 +27,6 @@ const BUFFSIZE: usize = 1024;
 
 const AMP_SAMPLES: usize = 16;
 const COLOUR_SAMPLES: usize = 3;
-
-#[derive(Clone, Debug)]
-struct RGB {
-    r: f64,
-    g: f64,
-    b: f64,
-}
-
-impl RGB {
-    fn new(r: f64, g: f64, b: f64) -> Self {
-        RGB { r, g, b }
-    }
-    fn scale(&self, x: f64) -> RGB {
-        RGB {
-            r: self.r * x,
-            g: self.g * x,
-            b: self.b * x,
-        }
-    }
-}
-
-impl From<RGB> for Color {
-    fn from(rgb: RGB) -> Self {
-        let f = |l: f64| l.min(255.) as u8;
-        Color::RGB(f(rgb.r), f(rgb.g), f(rgb.b))
-    }
-}
-
 
   // modified munsell // original munsell hex
   // [59, 100, 47],  // 0 #f0ea00
@@ -94,59 +70,6 @@ const NOTE_COLOURS: [RGB; 16] = [
     RGB { r: 0.0,   g: 0.624, b: 1.0   },
     RGB { r: 0.0,   g: 0.251, b: 1.0   },
 ];
-
-
-fn get_window_canvas() -> (sdl2::render::Canvas<sdl2::video::Window>, sdl2::render::TextureCreator<sdl2::video::WindowContext>, sdl2::EventPump) {
-    let sdl_context = sdl2::init()
-        .unwrap();
-    let video_subsystem = sdl_context
-        .video()
-        .unwrap();
-    let _image_context = sdl2::image::init(INIT_PNG).unwrap();
-    let window = video_subsystem.window("colours", 800, 600)
-        .resizable()
-        .position_centered()
-        .build()
-        .unwrap();
-    let mut canvas = window
-        .into_canvas()
-        .present_vsync()
-        .build()
-        .unwrap();
-
-    let texture_creator = canvas.texture_creator();
-
-    let events = sdl_context.event_pump().unwrap();
-    canvas.set_draw_color(Color::RGB(0, 0, 0));
-    canvas.clear();
-    canvas.present();
-    (canvas, texture_creator, events)
-}
-
-fn get_channel(client: &j::Client, name: &str) -> (JackReceiver, Computer) {
-    // TODO: accept buffsize as a param?
-    let (tx, rx) = lossyq::spsc::channel::<f32>(BUFFSIZE * 4);
-    let receiver = JackReceiver::new(client, name, tx);
-    let computer = Computer::new(rx);
-    (receiver, computer)
-}
-
-struct JackReceiver {
-    tx: lossyq::spsc::Sender<f32>,
-    jack_in: jack::port::Port<j::AudioInSpec>,
-}
-
-impl JackReceiver {
-    fn new(client: &j::Client, name: &str, tx: lossyq::spsc::Sender<f32>) -> Self {
-        let jack_in = client
-            .register_port(name, j::AudioInSpec::default())
-            .unwrap();
-        JackReceiver {
-            tx,
-            jack_in,
-        }
-    }
-}
 
 struct Computer {
     rx: lossyq::spsc::Receiver<f32>,
@@ -253,7 +176,8 @@ fn main() {
     let mut computers: Vec<Computer> = Vec::new();
 
     for i in 0..channels {
-        let (receiver, computer) = get_channel(&client, &format!("in_{}", i+1));
+        let (receiver, rx) = get_channel(&client, &format!("in_{}", i+1));
+        let computer = Computer::new(rx);
         receivers.push(receiver);
         computers.push(computer);
     }
