@@ -50,6 +50,7 @@ pub fn get_window_canvas() -> (sdl2::render::Canvas<sdl2::video::Window>, sdl2::
     let texture_creator = canvas.texture_creator();
 
     let events = sdl_context.event_pump().unwrap();
+    canvas.set_blend_mode(sdl2::render::BlendMode::Blend);
     canvas.set_draw_color(Color::RGB(0, 0, 0));
     canvas.clear();
     canvas.present();

@@ -28,6 +28,15 @@ const BUFFSIZE: usize = 1024;
 const AMP_SAMPLES: usize = 16;
 const COLOUR_SAMPLES: usize = 3;
 
+const PREPARE_FADE_MS: u32 = 3000;
+
+enum ProgramState {
+    Setup,
+    Prepare(time::Instant),
+    Play(time::Instant),
+    End,
+}
+
   // modified munsell // original munsell hex
   // [59, 100, 47],  // 0 #f0ea00
   // [70, 100, 42],  // 1 #b1d700
@@ -162,7 +171,59 @@ impl Computer {
     }
 }
 
+
+fn draw_colours(canvas: &mut sdl2::render::Canvas<sdl2::video::Window>,
+    computers: &Vec<Computer>,
+    colours: Vec<Color>,
+    (w, h): (u32, u32)) {
+    let rects = computers.len() as u32;
+    let rect_width = w as f64 / rects as f64;
+
+    for (i, colour) in colours.iter().enumerate() {
+        canvas.set_draw_color(*colour);
+        canvas
+            .fill_rect(Rect::new(i as i32 * rect_width as i32, 0, rect_width as u32, h))
+            .unwrap();
+    }
+}
+
+fn blue_overlay(canvas: &mut sdl2::render::Canvas<sdl2::video::Window>, (w, h): (u32, u32), a: u8) {
+    canvas.set_draw_color(Color {r: 0, g: 0, b: 127, a });
+    canvas.fill_rect(Rect::new(0, 0, w as u32, h)).unwrap();
+}
+
+fn drawing_overlay(canvas: &mut sdl2::render::Canvas<sdl2::video::Window>, images: &mut [sdl2::render::Texture], dt: u32) {
+    let fade = |dt|
+        if dt < 10_000 { dt as f64 / 10_000. }
+        else { (-(dt as f64) + 50_000.) / 10_000. };
+
+    // add a delay to the start
+    let dt: i64 = dt as i64 - 120_000;
+
+    let ref mut texture;
+    let alpha;
+    if dt < 60_000 {
+        texture = &mut images[0];
+        alpha = fade(dt);
+    } else if dt < 120_000 {
+        texture = &mut images[1];
+        alpha = fade(dt - 60_000);
+    } else if dt < 180_000 {
+        texture = &mut images[2];
+        alpha = fade(dt - 120_000);
+    } else {
+        texture = &mut images[3];
+        alpha = fade(dt - 180_000);
+    }
+
+    texture.set_alpha_mod((alpha * 128.).min(128.).max(0.) as u8);
+    canvas.copy(&texture, None, None).unwrap();
+}
+
+
 fn main() {
+    let mut program_state = ProgramState::Setup;
+
     let channels = env::args()
         .nth(1)
         .unwrap_or(2.to_string())
@@ -216,71 +277,76 @@ fn main() {
     gabriela.set_blend_mode(sdl2::render::BlendMode::Add);
 
     let mut images: [sdl2::render::Texture; 4] = [evan, fantou, olivia, gabriela];
-    let mut program_t0: Option<time::Instant> = None;
 
-    let fade = |dt|
-        if dt < 10_000 { dt as f64 / 10_000. }
-        else { (-(dt as f64) + 50_000.) / 10_000. };
+    let dt_ms = |t: time::Instant| t.elapsed().as_secs() as u32 * 1000 + t.elapsed().subsec_millis();
 
     'main_loop: loop {
         let frame_t0 = time::Instant::now();
+
         for computer in &mut computers {
             computer.update_colour();
         }
-        // println!("dt {:?}", frame_t0.elapsed());
-        let colours = computers
+        let colours: Vec<Color> = computers
             .iter()
             .map(Computer::get_colour)
-            .map(Color::from);
+            .map(Color::from)
+            .collect();
 
+        let size = canvas.window().size();
         canvas.set_draw_color(Color::RGB(0, 0, 0));
         canvas.clear();
 
-        let (w, h) = canvas.window().size();
-        let rects = computers.len() as u32;
-        let rect_width = w as f64 / rects as f64;
-
-        for (i, colour) in colours.enumerate() {
-            canvas.set_draw_color(colour);
-            canvas
-                .fill_rect(Rect::new(i as i32 * rect_width as i32, 0, rect_width as u32, h))
-                .unwrap();
-        }
-
-        if let Some(t) = program_t0 {
-            let dt = t.elapsed().as_secs() as u32 * 1000 + t.elapsed().subsec_millis();// - 120_000;
-            let ref mut texture;
-            let alpha;
-            if dt < 60_000 {
-                texture = &mut images[0];
-                alpha = fade(dt);
-            } else if dt < 120_000 {
-                texture = &mut images[1];
-                alpha = fade(dt - 60_000);
-            } else if dt < 180_000 {
-                texture = &mut images[2];
-                alpha = fade(dt - 120_000);
-            } else {
-                texture = &mut images[3];
-                alpha = fade(dt - 180_000);
+        match program_state {
+            ProgramState::Setup => {
+                draw_colours(&mut canvas, &computers, colours, size);
+                blue_overlay(&mut canvas, size, 224);
+            },
+            ProgramState::Prepare(t) => {
+                let dt = dt_ms(t);
+                blue_overlay(&mut canvas, size, ((1. - dt as f64 / PREPARE_FADE_MS as f64) * 224.) as u8);
+                if dt > PREPARE_FADE_MS {
+                    program_state = ProgramState::Play(time::Instant::now());
+                }
+            },
+            ProgramState::Play(t) => {
+                draw_colours(&mut canvas, &computers, colours, size);
+                drawing_overlay(&mut canvas, &mut images, dt_ms(t));
+            },
+            ProgramState::End => {
+                // black screen from here out
             }
-
-            texture.set_alpha_mod((alpha * 128.).min(128.).max(0.) as u8);
-
-            canvas.copy(&texture, None, None).unwrap();
         }
 
         canvas.present();
 
         for event in events.poll_iter() {
             match event {
-                Event::Quit {..} |
-                Event::KeyDown {keycode: Some(Keycode::Escape), ..} => {
+                Event::Quit {..} => {
                     break 'main_loop
                 },
-                Event::KeyDown {keycode: Some(Keycode::Space), ..} => {
-                    program_t0 = Some(time::Instant::now());
-                    println!("starting images");
+                Event::KeyDown {keycode: Some(key), ..} => {
+                    match key {
+                        Keycode::Escape => {
+                            break 'main_loop
+                        },
+                        Keycode::Space => {
+                            match program_state {
+                                ProgramState::Setup => {
+                                    println!("starting...");
+                                    program_state = ProgramState::Prepare(time::Instant::now());
+                                },
+                                _ => {
+                                    println!("restarting");
+                                    program_state = ProgramState::Play(time::Instant::now());
+                                }
+                            }
+                        },
+                        Keycode::Period => {
+                            println!("blackout");
+                            program_state = ProgramState::End;
+                        }
+                        _ => {}
+                    }
                 },
                 _ => {},
             }
