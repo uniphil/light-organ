@@ -192,6 +192,11 @@ fn blue_overlay(canvas: &mut sdl2::render::Canvas<sdl2::video::Window>, (w, h): 
     canvas.fill_rect(Rect::new(0, 0, w as u32, h)).unwrap();
 }
 
+fn draw_score(canvas: &mut sdl2::render::Canvas<sdl2::video::Window>, image: &mut sdl2::render::Texture, a: u8) {
+    image.set_alpha_mod(a);
+    canvas.copy(&image, None, None).unwrap();
+}
+
 fn drawing_overlay(canvas: &mut sdl2::render::Canvas<sdl2::video::Window>, images: &mut [sdl2::render::Texture], dt: u32) {
     let fade = |dt|
         if dt < 10_000 { dt as f64 / 10_000. }
@@ -267,6 +272,8 @@ fn main() {
 
     let (mut canvas, texture_creator, mut events) = get_window_canvas();
 
+    let mut score = texture_creator.load_texture("src/score.png").unwrap();
+    score.set_blend_mode(sdl2::render::BlendMode::Add);
     let mut evan = texture_creator.load_texture("src/evan.png").unwrap();
     evan.set_blend_mode(sdl2::render::BlendMode::Add);
     let mut fantou = texture_creator.load_texture("src/fantou.png").unwrap();
@@ -300,10 +307,12 @@ fn main() {
             ProgramState::Setup => {
                 draw_colours(&mut canvas, &computers, colours, size);
                 blue_overlay(&mut canvas, size, 224);
+                draw_score(&mut canvas, &mut score, 24);
             },
             ProgramState::Prepare(t) => {
                 let dt = dt_ms(t);
                 blue_overlay(&mut canvas, size, ((1. - dt as f64 / PREPARE_FADE_MS as f64) * 224.) as u8);
+                draw_score(&mut canvas, &mut score, ((1. - dt as f64 / (PREPARE_FADE_MS / 2) as f64).max(0.) * 24.) as u8);
                 if dt > PREPARE_FADE_MS {
                     program_state = ProgramState::Play(time::Instant::now());
                 }
