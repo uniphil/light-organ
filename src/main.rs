@@ -35,6 +35,7 @@ enum ProgramState {
     Prepare(time::Instant),
     Play(time::Instant),
     End,
+    JustBlack,
 }
 
   // modified munsell // original munsell hex
@@ -307,12 +308,11 @@ fn main() {
             ProgramState::Setup => {
                 draw_colours(&mut canvas, &computers, colours, size);
                 blue_overlay(&mut canvas, size, 224);
-                draw_score(&mut canvas, &mut score, 24);
             },
             ProgramState::Prepare(t) => {
+                draw_colours(&mut canvas, &computers, colours, size);
                 let dt = dt_ms(t);
                 blue_overlay(&mut canvas, size, ((1. - dt as f64 / PREPARE_FADE_MS as f64) * 224.) as u8);
-                draw_score(&mut canvas, &mut score, ((1. - dt as f64 / (PREPARE_FADE_MS / 2) as f64).max(0.) * 24.) as u8);
                 if dt > PREPARE_FADE_MS {
                     program_state = ProgramState::Play(time::Instant::now());
                 }
@@ -323,6 +323,10 @@ fn main() {
             },
             ProgramState::End => {
                 // black screen from here out
+                draw_score(&mut canvas, &mut score, 41);
+            },
+            ProgramState::JustBlack => {
+                draw_colours(&mut canvas, &computers, colours, size);
             }
         }
 
@@ -357,6 +361,9 @@ fn main() {
                         Keycode::R => {
                             println!("restart from setup");
                             program_state = ProgramState::Setup;
+                        },
+                        Keycode::B => {
+                            program_state = ProgramState::JustBlack;
                         },
                         _ => {}
                     }
