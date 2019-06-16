@@ -189,7 +189,7 @@ fn draw_colours(canvas: &mut sdl2::render::Canvas<sdl2::video::Window>,
 }
 
 fn blue_overlay(canvas: &mut sdl2::render::Canvas<sdl2::video::Window>, (w, h): (u32, u32), a: u8) {
-    canvas.set_draw_color(Color {r: 0, g: 0, b: 212, a });
+    canvas.set_draw_color(Color {r: 64, g: 0, b: 192, a });
     canvas.fill_rect(Rect::new(0, 0, w as u32, h)).unwrap();
 }
 
